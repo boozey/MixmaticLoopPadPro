@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <com.nakedape.mixmaticlooppad.NumberPickerPreference
+        android:key="pref_beat_threshold"
+        android:title="@string/pref_beat_threshold"
+        android:persistent="true"
+        android:defaultValue="30"/>
+</PreferenceScreen>
