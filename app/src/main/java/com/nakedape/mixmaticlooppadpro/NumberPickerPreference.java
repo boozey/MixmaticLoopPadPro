@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppad;
+package com.nakedape.mixmaticlooppadpro;
 
 import android.content.Context;
 import android.content.res.TypedArray;

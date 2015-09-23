@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppad;
+package com.nakedape.mixmaticlooppadpro;
 
 import android.content.ContentResolver;
 import android.content.res.Resources;

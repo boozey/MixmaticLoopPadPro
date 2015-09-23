@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppad;
+package com.nakedape.mixmaticlooppadpro;
 
 /**
  * Created by Nathan on 12/10/2014.

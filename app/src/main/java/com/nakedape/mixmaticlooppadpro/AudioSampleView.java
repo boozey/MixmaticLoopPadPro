@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppad;
+package com.nakedape.mixmaticlooppadpro;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -20,12 +20,10 @@ import android.view.View;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 

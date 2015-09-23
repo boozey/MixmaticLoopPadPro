@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppad;
+package com.nakedape.mixmaticlooppadpro;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
@@ -42,15 +42,6 @@ import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.amazon.device.ads.Ad;
-import com.amazon.device.ads.AdError;
-import com.amazon.device.ads.AdLayout;
-import com.amazon.device.ads.AdProperties;
-import com.amazon.device.ads.AdRegistration;
-import com.amazon.device.ads.DefaultAdListener;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
 
 import java.io.File;
 import java.io.IOException;
@@ -97,8 +88,6 @@ public class SampleEditActivity extends Activity {
     private File sampleDirectory;
     private View popup;
     private boolean saveSlice;
-    private AdLayout adView;
-    private boolean reloadAds;
 
     private Menu actionBarMenu;
     // Sample edit context menu
@@ -130,14 +119,6 @@ public class SampleEditActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sample_edit);
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
-
-        // Setup Amazon Ad
-        AdRegistration.setAppKey("83c8d7d1e7ec460fbf2f8f37f88c095a");
-        //AdRegistration.enableTesting(true);
-        AdRegistration.enableLogging(true);
-        adView = (AdLayout) findViewById(R.id.amazonAdView);
-        adView.setListener(new AmazonAdListener());
-        adView.loadAd();
 
         // Prepare stoarage directory
         if (Utils.isExternalStorageWritable()){
@@ -284,18 +265,13 @@ public class SampleEditActivity extends Activity {
     @Override
     protected void onResume(){
         super.onResume();
-        reloadAds = true;
-        if (adView != null && !adView.isLoading())
-            adView.loadAd();
     }
     @Override
     protected void onPause(){
         super.onPause();
-        reloadAds = false;
     }
     @Override
     protected void onStop(){
-        reloadAds = false;
         super.onStop();
         if (isFinishing()){
             dlgCanceled = true;
@@ -331,8 +307,6 @@ public class SampleEditActivity extends Activity {
     @Override
     protected void onDestroy(){
         super.onDestroy();
-        reloadAds = false;
-        adView.destroy();
 
     }
     @Override
@@ -657,7 +631,7 @@ public class SampleEditActivity extends Activity {
                 continuePlaying = false;
                 findViewById(R.id.buttonPlay).setBackgroundResource(R.drawable.button_play_large);
 
-        } else {
+        } else if (sampleView.getSamplePath() != null){
             // Request audio focs for playback
             int result = am.requestAudioFocus(afChangeListener,
                     // Use the music stream.
@@ -1303,51 +1277,4 @@ public class SampleEditActivity extends Activity {
         }
     }
 
-    // Amazon Ads
-    private class AmazonAdListener extends DefaultAdListener {
-        @Override
-        public void onAdLoaded(Ad ad, AdProperties adProperties){
-            if (ad == adView)
-            {
-                new Thread(new ReloadAd()).start();
-            }
-        }
-
-        @Override
-        public void onAdFailedToLoad(Ad ad, AdError error) {
-            // Call backup ad network.
-            Log.e(LOG_TAG, "Amazon ad failed to load");
-            Log.e(LOG_TAG, error.getMessage());
-            switch (error.getCode()){
-                case NETWORK_ERROR:
-                case NETWORK_TIMEOUT:
-                    new Thread(new ReloadAd()).start();
-                    break;
-                case INTERNAL_ERROR:
-                case NO_FILL:
-                    adView.setVisibility(View.GONE);
-                    AdView mAdView = (AdView) findViewById(R.id.adMobAdView);
-                    mAdView.setVisibility(View.VISIBLE);
-                    AdRequest adRequest = new AdRequest.Builder()
-                            .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
-                            .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
-                            .addTestDevice("5E3D3DD85078633EE1836B9FC5FB4D89")
-                            .build();
-                    mAdView.loadAd(adRequest);
-                    break;
-            }
-        }
-    }
-    private class ReloadAd implements Runnable {
-        @Override
-        public void run(){
-            android.os.Process.setThreadPriority(Process.THREAD_PRIORITY_LOWEST);
-            //Log.d(LOG_TAG, "Reload ad thread started");
-            try {
-                Thread.sleep(60000);
-                if (adView != null && reloadAds && !adView.isLoading())
-                    adView.loadAd();
-            } catch (InterruptedException e){ }
-        }
-    }
 }

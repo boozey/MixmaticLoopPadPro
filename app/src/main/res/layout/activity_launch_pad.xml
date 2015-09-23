@@ -57,28 +57,28 @@
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad1"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick"/>
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad2"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad3"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick"/>
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad4"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -91,28 +91,28 @@
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad5"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick"/>
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad6"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad7"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad8"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -125,28 +125,28 @@
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad9"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad10"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad11"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad12"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -159,28 +159,28 @@
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad13"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick"/>
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad14"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad15"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick"/>
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad16"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -193,28 +193,28 @@
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad17"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad18"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad19"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad20"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -227,28 +227,28 @@
         android:layout_width="fill_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad21"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick"/>
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad22"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad23"
             android:layout_width="0dp"
             android:layout_weight="1"
             android:layout_height="match_parent"
             android:background="@drawable/launch_pad_empty"
             android:onClick="touchPadClick" />
-        <com.nakedape.mixmaticlooppad.TouchPad
+        <com.nakedape.mixmaticlooppadpro.TouchPad
             android:id="@+id/touchPad24"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -295,10 +295,26 @@
                 android:background="@drawable/ic_action_delete"
                 android:onClick="DeleteSampleClick"/>
         </RelativeLayout>
-        <ListView
-            android:id="@+id/sample_listview"
-            android:layout_width="250dp"
-            android:layout_height="match_parent"
-            android:choiceMode="singleChoice"/>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/first_sample_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:drawableLeft="@drawable/ic_sound_wave_icon_green"
+                android:drawableStart="@drawable/ic_sound_wave_icon_green"
+                android:gravity="center_vertical"
+                android:text="@string/create_first_sample_msg"
+                android:background="@drawable/button_transparent"
+                android:onClick="AddSampleClick"
+                android:visibility="gone"/>
+            <ListView
+                android:id="@+id/sample_listview"
+                android:layout_width="250dp"
+                android:layout_height="match_parent"
+                android:choiceMode="singleChoice"/>
+        </LinearLayout>
     </LinearLayout>
 </RelativeLayout>

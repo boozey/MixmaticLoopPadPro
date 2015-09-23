@@ -1,6 +1,4 @@
-package com.nakedape.mixmaticlooppad;
-
-import android.util.Log;
+package com.nakedape.mixmaticlooppadpro;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -9,8 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
-import java.nio.ShortBuffer;
 import java.util.ArrayList;
 
 import javazoom.jl.converter.WaveFile;

@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppad;
+package com.nakedape.mixmaticlooppadpro;
 
 import android.graphics.Canvas;
 import android.graphics.Point;
@@ -6,20 +6,24 @@ import android.graphics.drawable.Drawable;
 import android.view.View;
 
 /**
- * Created by Nathan on 9/5/2015.
+ * Created by Nathan on 9/1/2015.
  */
-public class SampleDragShadowBuilder extends View.DragShadowBuilder {
+public class TouchPadDragShadowBuilder extends View.DragShadowBuilder {
+
     // The drag shadow image, defined as a drawable thing
     private static Drawable shadow;
 
     // Defines the constructor for myDragShadowBuilder
-    public SampleDragShadowBuilder(View v, Drawable image) {
+    public TouchPadDragShadowBuilder(View v) {
 
         // Stores the View parameter passed to myDragShadowBuilder.
         super(v);
 
         // Creates a draggable image that will fill the Canvas provided by the system.
-        shadow = image;
+        v.setSelected(false);
+        v.setPressed(false);
+        if (v.getBackground() != null)
+            shadow = v.getBackground();
     }
 
     // Defines a callback that sends the drag shadow dimensions and touch point back to the
@@ -30,7 +34,7 @@ public class SampleDragShadowBuilder extends View.DragShadowBuilder {
         int width, height;
 
         // Sets the width of the shadow to half the width of the original View
-        width = getView().getHeight();
+        width = getView().getWidth();
 
         // Sets the height of the shadow to half the height of the original View
         height = getView().getHeight();
