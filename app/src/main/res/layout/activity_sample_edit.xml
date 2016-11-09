@@ -7,7 +7,7 @@
     tools:context=".MainActivity">
 
 
-    <com.nakedape.mixmaticlooppadpro.AudioSampleView
+    <com.nakedape.mixmaticlooppad.AudioSampleView
         android:id="@+id/spectralView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

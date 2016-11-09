@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppadpro;
+package com.nakedape.mixmaticlooppad;
 
 /*
  * Free FFT and convolution (Java)

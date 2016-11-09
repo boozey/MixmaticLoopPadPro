@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppadpro;
+package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;

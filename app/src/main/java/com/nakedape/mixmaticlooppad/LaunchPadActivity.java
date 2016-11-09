@@ -1,4 +1,4 @@
-package com.nakedape.mixmaticlooppadpro;
+package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
@@ -27,10 +27,8 @@ import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
-import android.net.Uri;
 import android.os.*;
 import android.preference.PreferenceManager;
-import android.provider.Settings;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.ActionMode;
@@ -73,13 +71,6 @@ import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Random;
 
-// Licensing imports
-import com.google.android.vending.licensing.AESObfuscator;
-import com.google.android.vending.licensing.LicenseChecker;
-import com.google.android.vending.licensing.LicenseCheckerCallback;
-import com.google.android.vending.licensing.Policy;
-import com.google.android.vending.licensing.ServerManagedPolicy;
-
 import javazoom.jl.converter.WaveFile;
 
 
@@ -98,18 +89,6 @@ public class LaunchPadActivity extends Activity {
     public static String SAMPLE_VOLUME = "com.nakedape.mixmaticlooppad.volume";
     private static int GET_SAMPLE = 0;
     private static int GET_SLICES = 1;
-
-    // Licensing
-    private static final String BASE_64_PUBLIC_KEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjcQ7YSSmv5GSS3FrQ801508P/r5laGtv7GBG2Ax9ql6ZAJZI6UPrJIvN9gXjoRBnHOIphIg9HycJRxBwGfgcpEQ3F47uWJ/UvmPeQ3cVffFKIb/cAUqCS4puEtcDL2yDXoKjagsJNBjbRWz6tqDvzH5BtvdYoy4QUf8NqH8wd3/2R/m3PAVIr+lRlUAc1Dj2y40uOEdluDW+i9kbkMD8vrLKr+DGnB7JrKFAPaqxBNTeogv0vGNOWwJd3Tgx7VDm825Op/vyG9VQSM7W53TsyJE8NdwP8Q59B/WRlcsr+tHCyoQcjscrgVegiOyME1DfEUrQk/SPzr5AlCqa2AZ//wIDAQAB";
-    private LicenseCheckerCallback mLicenseCheckerCallback;
-    private LicenseChecker mChecker;
-    // Generate 20 random bytes, and put them here.
-    private static final byte[] SALT = new byte[] {
-            1, -15, -87, 52, 114, 11, -21, 12, 32, -63, 49,
-            0, -91, 30, 110, -4, 77, -115, 18, -1
-    };
-    private String DEVICE_ID;
-    private boolean isLicensed = false;
 
     private boolean isEditMode = false;
     private boolean isRecording = false;
@@ -180,32 +159,13 @@ public class LaunchPadActivity extends Activity {
     private Runtime runtime;
 
     // Activity overrides
-    // On create methods
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // find the retained fragment on activity restarts
-        FragmentManager fm = getFragmentManager();
-        savedData = (LaunchPadData) fm.findFragmentByTag("data");
-        if (savedData == null) {
-            setContentView(R.layout.loading_screen);
-            context = this;
-
-            // Do the license check
-            DEVICE_ID = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-            // Construct the LicenseCheckerCallback.
-            mLicenseCheckerCallback = new MyLicenseCheckerCallback();
-            // Construct the LicenseChecker with a Policy.
-            mChecker = new LicenseChecker(
-                    context, new ServerManagedPolicy(this,
-                    new AESObfuscator(SALT, getPackageName(), DEVICE_ID)),
-                    BASE_64_PUBLIC_KEY);
-            mChecker.checkAccess(mLicenseCheckerCallback);
-        }
-        else {
-            loadInBackground();
-        }
+        setContentView(R.layout.loading_screen);
+        loadInBackground();
     }
+    // Initialization methods
     private void loadInBackground(){
         // Prepare shared preferences
         launchPadprefs = getPreferences(MODE_PRIVATE);
@@ -511,8 +471,6 @@ public class LaunchPadActivity extends Activity {
         if (progressDialog != null)
             if (progressDialog.isShowing())
                 progressDialog.cancel();
-        if (mChecker != null)
-            mChecker.onDestroy();
         stopCounterThread = true;
         stopPlaybackThread = true;
         if (rootLayout != null) {
@@ -568,10 +526,12 @@ public class LaunchPadActivity extends Activity {
                 startActivity(intent);
                 return true;
             case R.id.action_edit_mode:
-                isRecording = false;
-                gotoEditMode();
-                View v = findViewById(activePads.get(0));
-                v.callOnClick();
+                if (activePads.size() > 0) {
+                    isRecording = false;
+                    gotoEditMode();
+                    View v = findViewById(activePads.get(0));
+                    v.callOnClick();
+                }
                 return true;
             case R.id.action_play:
                 if (isPlaying || isRecording) {
@@ -2610,107 +2570,5 @@ public class LaunchPadActivity extends Activity {
         public double getTimeStamp() {return timeStamp;}
         public String getEventType() {return eventType;}
         public int getSampleId() {return sampleId;}
-    }
-
-    private class MyLicenseCheckerCallback implements LicenseCheckerCallback {
-        public void allow(int reason) {
-            if (isFinishing()) {
-                // Don't update UI if Activity is finishing.
-                return;
-            }
-            // Should allow user access.
-            isLicensed = true;
-            loadInBackground();
-        }
-
-        public void dontAllow(int reason) {
-            if (isFinishing()) {
-                // Don't update UI if Activity is finishing.
-                return;
-            }
-
-            if (reason == Policy.RETRY) {
-                // If the reason received from the policy is RETRY, it was probably
-                // due to a loss of connection with the service, so we should give the
-                // user a chance to retry. So show a dialog to retry.
-                Log.d(LOG_TAG, "Not licensed RETRY");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                        builder.setCancelable(false);
-                        builder.setMessage(R.string.unlicensed_retry_message);
-                        builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                mChecker.checkAccess(mLicenseCheckerCallback);
-                            }
-                        });
-                        builder.setNegativeButton(getString(R.string.no), new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                finish();
-                            }
-                        });
-                        AlertDialog dialog = builder.create();
-                        dialog.show();
-                    }
-                });
-            } else {
-                // Otherwise, the user is not licensed to use this app.
-                // Your response should always inform the user that the application
-                // is not licensed, but your behavior at that point can vary. You might
-                // provide the user a limited access version of your app or you can
-                // take them to Google Play to purchase the app.
-                Log.d(LOG_TAG, "Not licensed");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                        builder.setCancelable(false);
-                        builder.setMessage(R.string.unlicensed_message);
-                        builder.setPositiveButton(getString(R.string.yes), new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                Intent intent = new Intent(Intent.ACTION_VIEW);
-                                intent.setData(Uri.parse("market://details?id=com.nakedape.mixmaticlooppad"));
-                                startActivity(intent);
-                                finish();
-                            }
-                        });
-                        builder.setNegativeButton(getString(R.string.no), new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                finish();
-                            }
-                        });
-                        AlertDialog dialog = builder.create();
-                        dialog.show();
-                    }
-                });
-            }
-        }
-
-        public void applicationError(int reason){
-            if (reason == LicenseCheckerCallback.ERROR_CHECK_IN_PROGRESS)
-                Log.d(LOG_TAG, "Licensing Error ERROR_CHECK_IN_PROGRESS" + String.valueOf(reason));
-            else if (reason == LicenseCheckerCallback.ERROR_INVALID_PACKAGE_NAME)
-                Log.d(LOG_TAG, "Licensing Error ERROR_INVALID_PACKAGE_NAME" + String.valueOf(reason));
-            else if (reason == LicenseCheckerCallback.ERROR_INVALID_PUBLIC_KEY)
-                Log.d(LOG_TAG, "Licensing Error ERROR_INVALID_PUBLIC_KEY" + String.valueOf(reason));
-            else if (reason == LicenseCheckerCallback.ERROR_MISSING_PERMISSION)
-                Log.d(LOG_TAG, "Licensing Error ERROR_MISSING_PERMISSION" + String.valueOf(reason));
-            else if (reason == LicenseCheckerCallback.ERROR_NON_MATCHING_UID)
-                Log.d(LOG_TAG, "Licensing Error ERROR_NON_MATCHING_UID" + String.valueOf(reason));
-            else if (reason == LicenseCheckerCallback.ERROR_NOT_MARKET_MANAGED)
-                Log.d(LOG_TAG, "Licensing Error ERROR_NOT_MARKET_MANAGED" + String.valueOf(reason));
-
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    finish();
-                }
-            });
-        }
     }
 }
