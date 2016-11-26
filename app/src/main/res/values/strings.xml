@@ -32,6 +32,13 @@
     <string name="error_out_of_memory">Out of memory</string>
     <string name="error_file_read">Unable to read file</string>
 
+    <!-- Sample Library Strings -->
+    <string name="my_samples">My Samples</string>
+    <string name="my_samples_underlined"><u>My Samples</u></string>
+    <string name="sample_packs">Sample Packs</string>
+    <string name="sample_packs_underlined"><u>Sample Packs</u></string>
+    <string name="no_sample_packs_msg">You have not downloaded any sample packs yet.  Click to open the store.</string>
+
     <!-- Strings for Sample Edit Activity main menu -->
     <string name="action_trim_wav">Trim to selection</string>
     <string name="action_trim_options">Trim options</string>
@@ -117,7 +124,7 @@
 
     <!-- Admob ad unit id strings-->
     <string name="sample_edit_banner_ad_id">ca-app-pub-4640479150069852/3320713529</string>
-    
+
     <!-- Facebook app id-->
     <string name="facebook_app_id">753482518050805</string>
 

@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "1021096961118",
+    "firebase_url": "https://mixmatic-loop-pad.firebaseio.com",
+    "project_id": "mixmatic-loop-pad",
+    "storage_bucket": "mixmatic-loop-pad.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1021096961118:android:9fe8b0028731e671",
+        "android_client_info": {
+          "package_name": "com.nakedape.mixmaticlooppad"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1021096961118-bbfo04egbqpofq6okk4211dt95fmm557.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeFnpNkqVObZ4__b0FolN5F5cgrfPvokA"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.nakedape.mixmaticlooppad" >
-    <!-- Required permission to check licensing. -->
-    <uses-permission android:name="com.android.vending.CHECK_LICENSE" />
+    package="com.nakedape.mixmaticlooppad">
 
+    <!-- Required permission to check licensing.
+    <uses-permission android:name="com.android.vending.CHECK_LICENSE" />
+    -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -11,17 +12,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="com.android.vending.BILLING" />
 
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:largeHeap="true"
-        android:theme="@style/AppTheme" >
-        <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id"/>
+        android:theme="@style/AppTheme">
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+
         <activity
-            android:name="com.nakedape.mixmaticlooppad.SampleEditActivity"
-            android:label="@string/app_name" >
+            android:name=".SampleEditActivity"
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
 
@@ -31,8 +36,8 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="com.nakedape.mixmaticlooppad.LaunchPadActivity"
-            android:label="@string/title_activity_launch_pad" >
+            android:name=".LaunchPadActivity"
+            android:label="@string/title_activity_launch_pad">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -40,9 +45,9 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="com.nakedape.mixmaticlooppad.EditPreferencesActivity"
-            android:label="@string/title_activity_sample_edit_preferences" >
-        </activity>
+            android:name=".EditPreferencesActivity"
+            android:label="@string/title_activity_sample_edit_preferences"></activity>
+        <activity android:name=".StoreActivity"></activity>
     </application>
 
 </manifest>

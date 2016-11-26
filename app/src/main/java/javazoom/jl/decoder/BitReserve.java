@@ -43,7 +43,7 @@ package javazoom.jl.decoder;
 final class BitReserve
 {
    /**
-    * Size of the internal buffer to store the reserved bits.
+    * Size of the internal buffer to store_sample_pack_item the reserved bits.
     * Must be a power of 2. And x8, as each bit is stored as a single
     * entry.
     */

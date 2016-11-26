@@ -45,6 +45,7 @@ import android.view.animation.AnticipateOvershootInterpolator;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
+import android.widget.ExpandableListView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -53,6 +54,8 @@ import android.widget.NumberPicker;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.firebase.storage.FirebaseStorage;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -154,15 +157,19 @@ public class LaunchPadActivity extends Activity {
     private Menu actionBarMenu;
     private boolean isSampleLibraryShowing = false;
     private SampleListAdapter sampleListAdapter;
+    private SamplePackListAdapter samplePackListAdapter;
     private int sampleLibraryIndex = -1;
     private MediaPlayer samplePlayer;
     private Runtime runtime;
+
+    // Firebase
 
     // Activity overrides
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.loading_screen);
+        context = this;
         loadInBackground();
     }
     // Initialization methods
@@ -196,8 +203,9 @@ public class LaunchPadActivity extends Activity {
         // Copy files over from directory used in previous app versions and delete the directories
         cleanUpStorageDirs();
 
-        // Instantiate sampleListAdapter
+        // Instantiate sampleListAdapter and samplePackListAdapter
         sampleListAdapter = new SampleListAdapter(context, R.layout.sample_list_item);
+        samplePackListAdapter = new SamplePackListAdapter(context, R.layout.sample_list_item);
 
         // Load UI
         runOnUiThread(new Runnable() {
@@ -277,7 +285,7 @@ public class LaunchPadActivity extends Activity {
                             return pathname.getName().endsWith(".wav");
                         }
                     });
-                    //sampleListAdapter.addAll(sampleFiles);
+                    //sampleListAdapter.addAll(sampleNames);
                 }
             }).start();
         }
@@ -1185,6 +1193,12 @@ public class LaunchPadActivity extends Activity {
     private void showSampleLibrary(){
         if (!isSampleLibraryShowing) {
             final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
+
+            // Setup sample pack listview
+            ListView samplePackListView = (ListView)library.findViewById(R.id.sample_pack_listview);
+            samplePackListView.setAdapter(samplePackListAdapter);
+
+            // Setup sample listview
             ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
             sampleListView.setAdapter(sampleListAdapter);
             sampleListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -1238,7 +1252,7 @@ public class LaunchPadActivity extends Activity {
                 }
             });
 
-            // Prepare Sample Library list adapter
+            // Prepare mySamples Library list adapter
             new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -1249,16 +1263,14 @@ public class LaunchPadActivity extends Activity {
                         }
                     });
                     sampleListAdapter.addAll(sampleFiles);
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (sampleListAdapter.getCount() == 0){
-                                library.findViewById(R.id.first_sample_button).setVisibility(View.VISIBLE);
-                            } else {
-                                library.findViewById(R.id.first_sample_button).setVisibility(View.GONE);
-                            }
-                        }
-                    });
+                }
+            }).start();
+
+            // Prepare samplepack list adapter
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+
                 }
             }).start();
 
@@ -1536,6 +1548,81 @@ public class LaunchPadActivity extends Activity {
         } else {
             Toast.makeText(context, getString(R.string.no_sample_selected_toast), Toast.LENGTH_SHORT).show();
         }
+    }
+    public void MySamplesClick(View v){
+        TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
+        mySamplesTextView.setText(R.string.my_samples_underlined);
+
+        TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
+        samplePacksTextView.setText(R.string.sample_packs);
+
+        findViewById(R.id.sample_listview).setVisibility(View.VISIBLE);
+        findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
+        findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
+    }
+    public void SamplePacksClick(View v){
+        TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
+        mySamplesTextView.setText(R.string.my_samples);
+
+        TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
+        samplePacksTextView.setText(R.string.sample_packs_underlined);
+
+        findViewById(R.id.sample_listview).setVisibility(View.GONE);
+        findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
+        if (samplePackListAdapter.getCount() == 0){
+            findViewById(R.id.sample_pack_empty_view).setVisibility(View.VISIBLE);
+        } else {
+            findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
+        }
+    }
+    private class SamplePackListAdapter extends BaseAdapter {
+        private ArrayList<String> names;
+        private ArrayList<String> titles;
+        private Context mContext;
+        private int resource_id;
+        private LayoutInflater mInflater;
+
+        private SamplePackListAdapter(Context context, int resource_id) {
+            this.mContext = context;
+            this.resource_id = resource_id;
+            mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            names = new ArrayList<>();
+            titles = new ArrayList<>();
+        }
+
+        @Override
+        public int getCount() {
+            if (names != null)
+                return names.size();
+            else return 0;
+        }
+
+        @Override
+        public String getItem(int position) {
+            return names.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(final int position, View convertView, final ViewGroup parent) {
+            if (convertView == null) {
+                convertView = mInflater.inflate(resource_id, null);
+            }
+
+            
+
+            return  convertView;
+        }
+    }
+
+    // In-app Store
+    public void OpenStore(View v){
+        Intent intent = new Intent(context, StoreActivity.class);
+        startActivity(intent);
     }
 
     // Handles touch events in record mode;
@@ -2516,6 +2603,7 @@ public class LaunchPadActivity extends Activity {
             return homeDirectory.getAbsolutePath() + "/tempo_stretch_test.wav";
         }
         public void reloadAudioTrack() {
+            Log.d(LOG_TAG, "sampleByteLength = " + sampleByteLength);
             audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,
                     sampleRate,
                     AudioFormat.CHANNEL_OUT_STEREO,
