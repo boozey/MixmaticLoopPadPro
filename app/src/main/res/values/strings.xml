@@ -26,6 +26,8 @@
     <string name="cancel">Cancel</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
+    <string name="no_thanks">No thanks</string>
+    <string name="dont_show_again">Don\'t show this again</string>
 
     <!-- Error message strings -->
     <string name="error_sample_load">Error loading sample</string>
@@ -37,7 +39,18 @@
     <string name="my_samples_underlined"><u>My Samples</u></string>
     <string name="sample_packs">Sample Packs</string>
     <string name="sample_packs_underlined"><u>Sample Packs</u></string>
-    <string name="no_sample_packs_msg">You have not downloaded any sample packs yet.  Click to open the store.</string>
+    <string name="no_sample_packs_msg">Download more sample packs</string>
+
+    <!-- Store Strings -->
+    <string name="buy">Buy</string>
+    <string name="purchasing">Completing purchase</string>
+    <string name="downloading">Downloading</string>
+    <string name="decompressing">Decompressing</string>
+    <string name="downloaded">Downloaded</string>
+    <string name="create_account_prompt">Do you want to create an account?</string>
+    <string name="account_explanation">Sign in with your email address or Google account.
+        This will keep track of your purchases across devices and allow you to re-download sample packs.
+        Without an account, you will be responsible for saving or transferring any files that have been purchased and downloaded.</string>
 
     <!-- Strings for Sample Edit Activity main menu -->
     <string name="action_trim_wav">Trim to selection</string>

@@ -7,8 +7,8 @@ android {
         applicationId 'com.nakedape.mixmaticlooppad'
         minSdkVersion 16
         targetSdkVersion 23
-        versionCode 32
-        versionName '1.4'
+        versionCode 36
+        versionName '1.5'
     }
     buildTypes {
         release {
@@ -27,5 +27,11 @@ dependencies {
     compile 'com.google.firebase:firebase-storage:9.8.0'
     compile 'com.google.firebase:firebase-auth:9.8.0'
     compile 'com.android.support:appcompat-v7:23.4.0'
+    // FirebaseUI Auth only
+    compile 'com.firebaseui:firebase-ui-auth:1.0.0'
+}
+repositories {
+    // ...
+    maven { url 'https://maven.fabric.io/public' }
 }
 apply plugin: 'com.google.gms.google-services'

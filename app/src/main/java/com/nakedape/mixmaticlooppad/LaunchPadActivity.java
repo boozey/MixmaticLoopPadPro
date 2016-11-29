@@ -15,6 +15,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.AudioFormat;
@@ -44,6 +45,7 @@ import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AnticipateOvershootInterpolator;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.BaseExpandableListAdapter;
 import android.widget.EditText;
 import android.widget.ExpandableListView;
 import android.widget.ImageButton;
@@ -59,11 +61,13 @@ import com.google.firebase.storage.FirebaseStorage;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -71,6 +75,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Random;
 
@@ -138,7 +144,7 @@ public class LaunchPadActivity extends Activity {
     private RelativeLayout rootLayout;
     private ProgressDialog progressDialog;
     private SparseArray<Sample> samples;
-    private File homeDirectory, sampleDirectory;
+    private File homeDirectory, sampleDirectory, samplePackDirectory;
     private int numTouchPads;
     private AudioManager am;
     private SharedPreferences launchPadprefs; // Stores setting for each launchpad
@@ -194,10 +200,12 @@ public class LaunchPadActivity extends Activity {
             sampleDirectory = new File(getExternalFilesDir(null), "Samples");
             if (!sampleDirectory.exists())
                 if (!sampleDirectory.mkdir()) Log.e(LOG_TAG, "error creating external files directory");
+            samplePackDirectory = new File(getExternalFilesDir(null), "Sample Packs");
         } else {
             sampleDirectory = new File(getFilesDir(), "Samples");
             if (!sampleDirectory.exists())
                 if (!sampleDirectory.mkdir()) Log.e(LOG_TAG, "error creating internal files directory");
+            samplePackDirectory = new File(getFilesDir(), "Sample Packs");
         }
 
         // Copy files over from directory used in previous app versions and delete the directories
@@ -205,7 +213,7 @@ public class LaunchPadActivity extends Activity {
 
         // Instantiate sampleListAdapter and samplePackListAdapter
         sampleListAdapter = new SampleListAdapter(context, R.layout.sample_list_item);
-        samplePackListAdapter = new SamplePackListAdapter(context, R.layout.sample_list_item);
+        samplePackListAdapter = new SamplePackListAdapter(context, R.layout.sample_pack_list_item);
 
         // Load UI
         runOnUiThread(new Runnable() {
@@ -765,7 +773,7 @@ public class LaunchPadActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -1194,10 +1202,6 @@ public class LaunchPadActivity extends Activity {
         if (!isSampleLibraryShowing) {
             final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
 
-            // Setup sample pack listview
-            ListView samplePackListView = (ListView)library.findViewById(R.id.sample_pack_listview);
-            samplePackListView.setAdapter(samplePackListAdapter);
-
             // Setup sample listview
             ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
             sampleListView.setAdapter(sampleListAdapter);
@@ -1266,11 +1270,16 @@ public class LaunchPadActivity extends Activity {
                 }
             }).start();
 
+            // Setup sample pack listviews
+            ListView samplePackListView = (ListView)library.findViewById(R.id.sample_pack_listview);
+            samplePackListView.setAdapter(samplePackListAdapter);
+
+
             // Prepare samplepack list adapter
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-
+                    samplePackListAdapter.refresh();
                 }
             }).start();
 
@@ -1556,9 +1565,9 @@ public class LaunchPadActivity extends Activity {
         TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
         samplePacksTextView.setText(R.string.sample_packs);
 
-        findViewById(R.id.sample_listview).setVisibility(View.VISIBLE);
-        findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
-        findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_listview).setVisibility(View.VISIBLE);
+        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
     }
     public void SamplePacksClick(View v){
         TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
@@ -1567,17 +1576,14 @@ public class LaunchPadActivity extends Activity {
         TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
         samplePacksTextView.setText(R.string.sample_packs_underlined);
 
-        findViewById(R.id.sample_listview).setVisibility(View.GONE);
-        findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
-        if (samplePackListAdapter.getCount() == 0){
-            findViewById(R.id.sample_pack_empty_view).setVisibility(View.VISIBLE);
-        } else {
-            findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
-        }
+        rootLayout.findViewById(R.id.sample_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
     }
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
         private ArrayList<String> titles;
+        private ArrayList<String> genres;
         private Context mContext;
         private int resource_id;
         private LayoutInflater mInflater;
@@ -1588,6 +1594,33 @@ public class LaunchPadActivity extends Activity {
             mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             names = new ArrayList<>();
             titles = new ArrayList<>();
+            genres = new ArrayList<>();
+        }
+
+        private void refresh(){
+            if (samplePackDirectory.exists()) {
+                File[] packFolders = samplePackDirectory.listFiles();
+                for (File folder : packFolders) {
+                    if (folder.isDirectory() && !names.contains(folder.getName())) {
+                        names.add(folder.getName());
+                        try {
+                            BufferedReader br = new BufferedReader(new FileReader(new File(folder, folder.getName() + ".txt")));
+                            titles.add(br.readLine());
+                            genres.add(br.readLine());
+                            br.close();
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    notifyDataSetChanged();
+                                }
+                            });
+                        } catch (IOException e) {
+                            //You'll need to add proper error handling here
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
         }
 
         @Override
@@ -1613,11 +1646,185 @@ public class LaunchPadActivity extends Activity {
                 convertView = mInflater.inflate(resource_id, null);
             }
 
-            
+            TextView titleView = (TextView)convertView.findViewById(R.id.title_view);
+            titleView.setText(titles.get(position));
+
+            TextView genreView = (TextView)convertView.findViewById(R.id.genre_view);
+            genreView.setText(genres.get(position));
+
+            File image = new File(new File(samplePackDirectory, names.get(position)), names.get(position) + ".png");
+            if (image.exists()) {
+                ImageView imageView = (ImageView)convertView.findViewById(R.id.image_view);
+                BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+                Bitmap bitmap = BitmapFactory.decodeFile(image.getAbsolutePath(), bmOptions);
+                imageView.setImageBitmap(bitmap);
+            }
+
+            convertView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showSamplePackFiles(names.get(position));
+                }
+            });
 
             return  convertView;
         }
     }
+    private void showSamplePackFiles(String name){
+        ExpandableListView packListView = (ExpandableListView)rootLayout.findViewById(R.id.sample_pack_files_listview);
+        final SamplePackFilesListAdapter filesListAdapter = new SamplePackFilesListAdapter(context, R.layout.sample_pack_folder_list_item, R.layout.sample_pack_file_list_item);
+        packListView.setAdapter(filesListAdapter);
+        filesListAdapter.loadPack(name);
+
+        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
+        packListView.setVisibility(View.VISIBLE);
+    }
+    private class SamplePackFilesListAdapter extends BaseExpandableListAdapter {
+        private LayoutInflater mInflater;
+        private Context context;
+        private int groupResourceId, childResourceId;
+        private ArrayList<String> folderNames;
+        private HashMap<String, ArrayList<String>> fileNames;
+        private String samplePackName;
+
+        public SamplePackFilesListAdapter(Context context, int groupResourceId, int childResourceId){
+            this.context = context;
+            this.groupResourceId = groupResourceId;
+            this.childResourceId = childResourceId;
+            folderNames = new ArrayList<>();
+            fileNames = new HashMap<>();
+        }
+
+        private void loadPack(String name){
+            samplePackName = name;
+            File sampleFolder = new File(samplePackDirectory, name);
+            if (sampleFolder.exists() && sampleFolder.isDirectory()){
+                for (File folder : sampleFolder.listFiles()){
+                    if (folder.isDirectory()) {
+                        folderNames.add(folder.getName());
+                        ArrayList<String> names = new ArrayList<>(Arrays.asList(folder.list()));
+                        fileNames.put(folder.getName(), names);
+                    }
+                }
+                notifyDataSetChanged();
+            }
+        }
+
+        @Override
+        public boolean hasStableIds() {
+            return false;
+        }
+
+        @Override
+        public boolean isChildSelectable(int groupPosition, int childPosition) {
+            return true;
+        }
+
+        @Override
+        public String getChild(int groupPosition, int childPosititon) {
+            String folderName = folderNames.get(groupPosition);
+            String path = samplePackDirectory.getAbsolutePath() + "/" + samplePackName + "/" + folderName + "/" + fileNames.get(folderName).get(childPosititon);
+            return path;
+        }
+
+        @Override
+        public int getChildrenCount(int groupPosition) {
+            return fileNames.get(folderNames.get(groupPosition)).size();
+        }
+
+        @Override
+        public long getChildId(int groupPosition, int childPosition) {
+            return childPosition;
+        }
+
+        @Override
+        public View getChildView(final int groupPosition, final int childPosition,
+                                 boolean isLastChild, View convertView, ViewGroup parent) {
+            if (convertView == null) {
+                mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+                convertView = mInflater.inflate(childResourceId, null);
+            }
+
+            TextView filenameView = (TextView)convertView.findViewById(R.id.textView);
+            filenameView.setText(fileNames.get(folderNames.get(groupPosition)).get(childPosition));
+
+            convertView.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    // Goto edit mode
+                    if (!isEditMode)
+                        gotoEditMode();
+
+                    // Start drag
+                    ClipData.Item pathItem = new ClipData.Item(getChild(groupPosition, childPosition));
+                    String[] mime_type = {ClipDescription.MIMETYPE_TEXT_PLAIN};
+                    ClipData dragData = new ClipData(SAMPLE_PATH, mime_type, pathItem);
+                    Random random = new Random();
+                    Drawable drawable;
+                    switch (random.nextInt(4)) {
+                        case 0:
+                            drawable = getResources().getDrawable(R.drawable.button_blue);
+                            dragData.addItem(new ClipData.Item(String.valueOf(0)));
+                            break;
+                        case 1:
+                            drawable = getResources().getDrawable(R.drawable.button_red);
+                            dragData.addItem(new ClipData.Item(String.valueOf(1)));
+                            break;
+                        case 2:
+                            drawable = getResources().getDrawable(R.drawable.button_green);
+                            dragData.addItem(new ClipData.Item(String.valueOf(2)));
+                            break;
+                        case 3:
+                            drawable = getResources().getDrawable(R.drawable.button_orange);
+                            dragData.addItem(new ClipData.Item(String.valueOf(3)));
+                            break;
+                        default:
+                            drawable = getResources().getDrawable(R.drawable.button_blue);
+                            dragData.addItem(new ClipData.Item(String.valueOf(0)));
+                            break;
+                    }
+                    View.DragShadowBuilder myShadow = new SampleDragShadowBuilder(v, drawable);
+                    v.startDrag(dragData,  // the data to be dragged
+                            myShadow,  // the drag shadow builder
+                            null,      // no need to use local data
+                            0          // flags (not currently used, set to 0)
+                    );
+                    return true;
+                }
+            });
+
+            return convertView;
+        }
+
+        @Override
+        public int getGroupCount() {
+            return folderNames.size();
+        }
+
+        @Override
+        public String getGroup(int position) {
+            return folderNames.get(position);
+        }
+
+        @Override
+        public long getGroupId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getGroupView(int position, boolean isExpanded, View convertView, final ViewGroup parent) {
+            if (convertView == null) {
+                mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+                convertView = mInflater.inflate(groupResourceId, null);
+            }
+
+            TextView folderNameView = (TextView)convertView.findViewById(R.id.textView);
+            folderNameView.setText(folderNames.get(position));
+
+            return convertView;
+        }
+    }
+
 
     // In-app Store
     public void OpenStore(View v){
@@ -2446,11 +2653,12 @@ public class LaunchPadActivity extends Activity {
             this.path = path;
             this.id = id;
             sampleFile = new File(path);
+            Log.d(LOG_TAG, "Sample path: " + sampleFile.getAbsolutePath());
             if (sampleFile.exists()){
                 sampleByteLength = (int)sampleFile.length() - 44;
                 sampleRate = Utils.getWavSampleRate(sampleFile);
                 reloadAudioTrack();
-            }
+            } else Log.d(LOG_TAG, "File doesn't exist");
         }
         public Sample(String path, int launchMode, boolean loopMode){
             this.path = path;

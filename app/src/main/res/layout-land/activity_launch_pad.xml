@@ -309,28 +309,38 @@
                     android:onClick="SamplePacksClick"
                     android:clickable="true"/>
             </LinearLayout>
-            <ListView
-                android:id="@+id/sample_listview"
-                android:layout_width="250dp"
-                android:layout_height="match_parent"
-                android:choiceMode="singleChoice"/>
-            <ListView android:id="@+id/sample_pack_listview"
-                android:layout_width="250dp"
-                android:layout_height="match_parent"
-                android:visibility="gone"/>
             <TextView android:id="@+id/sample_pack_empty_view"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:drawableStart="@drawable/ic_shopping_bag_40dp"
+                android:drawableLeft="@drawable/ic_shopping_bag_40dp"
+                android:drawablePadding="8dp"
                 android:layout_margin="16dp"
                 android:maxWidth="250dp"
                 android:text="@string/no_sample_packs_msg"
-                android:textSize="24sp"
+                android:textSize="20sp"
                 android:textAlignment="center"
-                android:visibility="gone"
+                android:visibility="visible"
                 android:onClick="OpenStore"
-                android:clickable="true">
-
-            </TextView>
+                android:clickable="true"/>
+            <ListView
+                android:id="@+id/sample_listview"
+                android:layout_width="250dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:choiceMode="singleChoice"
+                android:visibility="visible"/>
+            <ListView android:id="@+id/sample_pack_listview"
+                android:layout_width="250dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:visibility="gone"/>
+            <ExpandableListView android:id="@+id/sample_pack_files_listview"
+                android:layout_width="250dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:visibility="gone"/>
         </LinearLayout>
     </LinearLayout>
 </RelativeLayout>

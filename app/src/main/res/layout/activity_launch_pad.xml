@@ -295,26 +295,65 @@
                 android:background="@drawable/ic_action_delete"
                 android:onClick="DeleteSampleClick"/>
         </RelativeLayout>
+        <!-- Main tray-->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical">
-            <TextView
-                android:id="@+id/first_sample_button"
-                android:layout_width="wrap_content"
+            <!-- Button bar-->
+            <LinearLayout android:id="@+id/sample_lib_button_bar"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:drawableLeft="@drawable/ic_sound_wave_icon_green"
-                android:drawableStart="@drawable/ic_sound_wave_icon_green"
-                android:gravity="center_vertical"
-                android:text="@string/create_first_sample_msg"
-                android:background="@drawable/button_transparent"
-                android:onClick="AddSampleClick"
-                android:visibility="gone"/>
+                android:padding="8dp"
+                android:orientation="horizontal"
+                android:background="@android:color/black">
+                <TextView android:id="@+id/my_samples_button"
+                    android:layout_width="0dp"
+                    android:layout_weight="10"
+                    android:layout_height="wrap_content"
+                    android:text="@string/my_samples_underlined"
+                    android:onClick="MySamplesClick"
+                    android:clickable="true"/>
+                <TextView android:id="@+id/sample_packs_button"
+                    android:layout_width="0dp"
+                    android:layout_weight="12"
+                    android:layout_height="wrap_content"
+                    android:text="@string/sample_packs"
+                    android:onClick="SamplePacksClick"
+                    android:clickable="true"/>
+            </LinearLayout>
+            <TextView android:id="@+id/sample_pack_empty_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:drawableStart="@drawable/ic_shopping_bag_40dp"
+                android:drawableLeft="@drawable/ic_shopping_bag_40dp"
+                android:drawablePadding="8dp"
+                android:layout_margin="16dp"
+                android:maxWidth="250dp"
+                android:text="@string/no_sample_packs_msg"
+                android:textSize="20sp"
+                android:textAlignment="center"
+                android:visibility="visible"
+                android:onClick="OpenStore"
+                android:clickable="true"/>
             <ListView
                 android:id="@+id/sample_listview"
                 android:layout_width="250dp"
-                android:layout_height="match_parent"
-                android:choiceMode="singleChoice"/>
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:choiceMode="singleChoice"
+                android:visibility="visible"/>
+            <ListView android:id="@+id/sample_pack_listview"
+                android:layout_width="250dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:visibility="gone"/>
+            <ExpandableListView android:id="@+id/sample_pack_files_listview"
+                android:layout_width="250dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:visibility="gone"/>
         </LinearLayout>
     </LinearLayout>
 </RelativeLayout>
