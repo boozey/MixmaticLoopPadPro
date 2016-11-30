@@ -111,7 +111,6 @@ public class StoreActivity extends Activity {
                     // User is signed in
                     Log.d(LOG_TAG, "onAuthStateChanged:signed_in:" + user.getUid());
 
-
                     // Setup storage references and download sample pack index
                     packFolderRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks");
                     StorageReference indexRef = packFolderRef.child("index.txt");
@@ -130,6 +129,19 @@ public class StoreActivity extends Activity {
                             Log.d(LOG_TAG, "Index download error");
                         }
                     });
+
+                    // Download purchase list
+                    if (!user.isAnonymous()) {
+                        StorageReference purchasesRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/user/" + user.getUid() + "/purchases.txt");
+                        purchasesRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
+                            @Override
+                            public void onSuccess(byte[] bytes) {
+                                LoadPurchaseRec(bytes);
+                            }
+                        });
+                    } else {
+                        LoadLocalPurchaseRec();
+                    }
 
                 } else {
                     // User is signed out
@@ -228,8 +240,26 @@ public class StoreActivity extends Activity {
         }
     }
 
+
+    private void setupFolders(){
+        // Prepare stoarage directories
+        if (Utils.isExternalStorageWritable()){
+            samplePackFolder = new File(getExternalFilesDir(null), "Sample Packs");
+            if (!samplePackFolder.exists())
+                if (!samplePackFolder.mkdir()) Log.e(LOG_TAG, "error creating external files directory");
+        } else {
+            samplePackFolder = new File(getFilesDir(), "Sample Packs");
+            if (!samplePackFolder.exists())
+                if (!samplePackFolder.mkdir()) Log.e(LOG_TAG, "error creating internal files directory");
+        }
+
+        // Folder to hold cached sample pack descriptions and images
+        cacheFolder = getCacheDir();
+    }
+
     // Store
     private ArrayList<String> availPacks;
+    private ArrayList<String> ownedPacks;
     private int storeWindowSize = 5;
     private int storeIndex = 0;
     private void LoadStoreData(byte[] indexBytes){
@@ -307,20 +337,53 @@ public class StoreActivity extends Activity {
         }
         storeIndex += storeWindowSize;
     }
-    private void setupFolders(){
-        // Prepare stoarage directories
-        if (Utils.isExternalStorageWritable()){
-            samplePackFolder = new File(getExternalFilesDir(null), "Sample Packs");
-            if (!samplePackFolder.exists())
-                if (!samplePackFolder.mkdir()) Log.e(LOG_TAG, "error creating external files directory");
-        } else {
-            samplePackFolder = new File(getFilesDir(), "Sample Packs");
-            if (!samplePackFolder.exists())
-                if (!samplePackFolder.mkdir()) Log.e(LOG_TAG, "error creating internal files directory");
+    private void LoadPurchaseRec(byte[] purchListBytes){
+        // Processs remote purchase record
+        try{
+            String purchasesTextDL;
+            purchasesTextDL = new String(purchListBytes, "UTF-8");
+            String[] packNameArray = purchasesTextDL.split("\n");
+            ownedPacks = new ArrayList<>(packNameArray.length);
+            for (String s : packNameArray)
+                ownedPacks.add(s.trim());
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            Log.e(LOG_TAG, "Error reading remote purchase list");
         }
 
-        // Folder to hold cached sample pack descriptions and images
-        cacheFolder = getCacheDir();
+        // Save remote purchase record locally
+        File recordFile = new File(getFilesDir(), "purchases.txt");
+        try {
+            if (recordFile.exists()) recordFile.delete();
+            else recordFile.createNewFile();
+            FileWriter writer = new FileWriter(recordFile);
+            for (String packName : ownedPacks) {
+                writer.append(packName + "\n");
+            }
+            writer.flush();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e(LOG_TAG, "Error writing local purchase record");
+        }
+
+    }
+    private void LoadLocalPurchaseRec(){
+        ownedPacks = new ArrayList<>();
+        File recordFile = new File(getFilesDir(), "purchases.txt");
+        if (recordFile.exists()){
+            try {
+                BufferedReader reader = new BufferedReader(new FileReader(recordFile));
+                String line;
+                while ((line = reader.readLine()) != null){
+                    ownedPacks.add(line.trim());
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(LOG_TAG, "Error reading local purchase record");
+            }
+        }
     }
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
@@ -425,12 +488,23 @@ public class StoreActivity extends Activity {
 
                 final View statusBar = convertView.findViewById(R.id.status_bar_linear_layout);
                 buyButton.setVisibility(View.VISIBLE);
-                buyButton.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        startPurchaseFlow(skus.get(position), statusBar, names.get(position));
-                    }
-                });
+                if ((ownedPacks != null && ownedPacks.contains(names.get(position))) || BuildConfig.DEBUG){
+                    buyButton.setText(R.string.download);
+                    buyButton.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            downloadPack(statusBar, names.get(position));
+                        }
+                    });
+                } else {
+                    buyButton.setText(R.string.buy);
+                    buyButton.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            startPurchaseFlow(skus.get(position), statusBar, names.get(position));
+                        }
+                    });
+                }
 
                 File image = new File(cacheFolder, names.get(position) + ".png");
                 if (image.exists()) {
@@ -717,12 +791,13 @@ public class StoreActivity extends Activity {
         }
     }
     private void updatePurchaseRecord(String packName){
+        ownedPacks.add(packName);
         File recordFile = new File(getFilesDir(), "purchases.txt");
         try {
             // Write local record
             if (!recordFile.exists()) recordFile.createNewFile();
             FileWriter writer = new FileWriter(recordFile);
-            writer.append(packName);
+            writer.append(packName + "\n");
             writer.flush();
             writer.close();
 

@@ -629,6 +629,8 @@ public class LaunchPadActivity extends Activity {
                     notifySampleLoadError(sample);
                 }
             }
+        } else if (requestCode == STORE_RESULT){
+            samplePackListAdapter.refresh();
         }
     }
 
@@ -1827,9 +1829,10 @@ public class LaunchPadActivity extends Activity {
 
 
     // In-app Store
+    public static final int STORE_RESULT = 1001;
     public void OpenStore(View v){
         Intent intent = new Intent(context, StoreActivity.class);
-        startActivity(intent);
+        startActivityForResult(intent, STORE_RESULT);
     }
 
     // Handles touch events in record mode;

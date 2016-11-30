@@ -43,6 +43,7 @@
 
     <!-- Store Strings -->
     <string name="buy">Buy</string>
+    <string name="download">Download</string>
     <string name="purchasing">Completing purchase</string>
     <string name="downloading">Downloading</string>
     <string name="decompressing">Decompressing</string>
