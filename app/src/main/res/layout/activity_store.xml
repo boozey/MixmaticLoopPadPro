@@ -5,36 +5,61 @@
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="horizontal">
-    <LinearLayout
+    <ProgressBar android:id="@+id/center_progress_bar"
         android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
-        <TextView android:id="@+id/sample_packs_button"
-            android:layout_width="120dp"
-            android:paddingLeft="8dp"
-            android:paddingStart="8dp"
-            android:layout_height="wrap_content"
-            android:paddingTop="20dp"
-            android:paddingBottom="20dp"
-            android:text="Sample Packs"
-            android:clickable="true"/>
-        <TextView android:id="@+id/app_extras_button"
-            android:layout_width="120dp"
-            android:paddingLeft="8dp"
-            android:paddingStart="8dp"
-            android:layout_height="wrap_content"
-            android:paddingTop="20dp"
-            android:paddingBottom="20dp"
-            android:text="App Extras"
-            android:clickable="true"/>
-    </LinearLayout>
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"/>
     <ListView android:id="@+id/store_item_list"
         android:layout_width="wrap_content"
+        android:layout_marginLeft="30dp"
         android:layout_height="match_parent"/>
+    <!-- Sample Library -->
+    <LinearLayout android:id="@+id/tab_tray"
+        android:orientation="horizontal"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentLeft="true"
+        android:background="@color/primary_dark"
+        android:visibility="visible"
+        android:translationX="-120dp"
+        android:gravity="end">
+    <!-- Main tray-->
+        <LinearLayout android:id="@+id/tray"
+            android:layout_width="120dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:background="@color/primary_dark">
+            <TextView android:id="@+id/sample_packs_button"
+                android:layout_width="wrap_content"
+                android:paddingLeft="8dp"
+                android:paddingStart="8dp"
+                android:layout_height="wrap_content"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
+                android:text="Sample Packs"
+                android:clickable="true"/>
+            <TextView android:id="@+id/app_extras_button"
+                android:layout_width="wrap_content"
+                android:paddingLeft="8dp"
+                android:paddingStart="8dp"
+                android:layout_height="wrap_content"
+                android:paddingTop="20dp"
+                android:paddingBottom="20dp"
+                android:text="App Extras"
+                android:clickable="true"/>
+        </LinearLayout>
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:background="@color/primary_dark"
+            android:onClick="TrayTabClick">
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:background="@drawable/ic_action_navigation_more_vert"/>
+        </RelativeLayout>
     </LinearLayout>
 
 </RelativeLayout>

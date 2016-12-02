@@ -2,6 +2,7 @@ package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -16,10 +17,13 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
@@ -96,7 +100,6 @@ public class StoreActivity extends Activity {
                     Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
                 }
                 // Hooray, IAB is fully set up!
-                checkForUnconsumedPurchases();
                 querySkuDetails();
             }
         });
@@ -126,7 +129,7 @@ public class StoreActivity extends Activity {
                         @Override
                         public void onFailure(@NonNull Exception exception) {
                             // Handle any errors
-                            Log.d(LOG_TAG, "Index download error");
+                            Log.e(LOG_TAG, "Index download error");
                         }
                     });
 
@@ -263,6 +266,8 @@ public class StoreActivity extends Activity {
     private int storeWindowSize = 5;
     private int storeIndex = 0;
     private void LoadStoreData(byte[] indexBytes){
+        storeIndex = 0;
+        storeWindowSize = 5;
         String indexText;
         try {
             indexText = new String(indexBytes, "UTF-8");
@@ -276,7 +281,20 @@ public class StoreActivity extends Activity {
             samplePackListAdapter = new SamplePackListAdapter(this, R.layout.store_sample_pack_item);
             ListView packListView = (ListView)findViewById(R.id.store_item_list);
             packListView.setAdapter(samplePackListAdapter);
+            packListView.setOnScrollListener(new AbsListView.OnScrollListener() {
+                @Override
+                public void onScrollStateChanged(AbsListView view, int scrollState) {
+                    if (view.getLastVisiblePosition() >= samplePackListAdapter.getCount() - 1)
+                        downloadNextInfoSet();
+                }
 
+                @Override
+                public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+
+                }
+            });
+
+            rootLayout.findViewById(R.id.center_progress_bar).setVisibility(View.GONE);
             downloadNextInfoSet();
 
         } catch (UnsupportedEncodingException e){
@@ -321,7 +339,6 @@ public class StoreActivity extends Activity {
                                 imageRef.getFile(image).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
                                     @Override
                                     public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
-                                        //samplePackListAdapter.addPack(packName);
                                         samplePackListAdapter.notifyDataSetChanged();
                                     }
                                 });
@@ -336,6 +353,7 @@ public class StoreActivity extends Activity {
             }
         }
         storeIndex += storeWindowSize;
+        storeIndex = Math.min(storeIndex, availPacks.size());
     }
     private void LoadPurchaseRec(byte[] purchListBytes){
         // Processs remote purchase record
@@ -390,6 +408,7 @@ public class StoreActivity extends Activity {
         private ArrayList<String> titles;
         private ArrayList<String> genres;
         private ArrayList<String> skus;
+        private ArrayList<String> bpms;
         private ArrayList<String> details;
         private Context mContext;
         private int resource_id;
@@ -403,6 +422,7 @@ public class StoreActivity extends Activity {
             titles = new ArrayList<>();
             genres = new ArrayList<>();
             skus = new ArrayList<>();
+            bpms = new ArrayList<>();
             details = new ArrayList<>();
         }
 
@@ -411,6 +431,7 @@ public class StoreActivity extends Activity {
             titles.add(null);
             genres.add(null);
             skus.add(null);
+            bpms.add(null);
             details.add(null);
             notifyDataSetChanged();
         }
@@ -422,6 +443,7 @@ public class StoreActivity extends Activity {
                 try {
                     BufferedReader br = new BufferedReader(new FileReader(desc));
                     titles.set(index, br.readLine());
+                    bpms.set(index, br.readLine());
                     genres.set(index, br.readLine());
                     skus.set(index, br.readLine());
                     String line;
@@ -466,6 +488,7 @@ public class StoreActivity extends Activity {
 
             ProgressBar loadingBar = (ProgressBar)convertView.findViewById(R.id.loading_circle_spinner);
             TextView titleView = (TextView)convertView.findViewById(R.id.title_view);
+            TextView bpmView = (TextView)convertView.findViewById(R.id.bpm_view);
             TextView genreView = (TextView)convertView.findViewById(R.id.genre_view);
             TextView detailsView = (TextView)convertView.findViewById(R.id.details_view);
             TextView priceView = (TextView)convertView.findViewById(R.id.price_view);
@@ -476,6 +499,9 @@ public class StoreActivity extends Activity {
 
                 titleView.setVisibility(View.VISIBLE);
                 titleView.setText(titles.get(position));
+
+                bpmView.setVisibility(View.VISIBLE);
+                bpmView.setText(bpms.get(position));
 
                 genreView.setVisibility(View.VISIBLE);
                 genreView.setText(genres.get(position));
@@ -517,12 +543,97 @@ public class StoreActivity extends Activity {
             } else {
                 loadingBar.setVisibility(View.VISIBLE);
                 titleView.setVisibility(View.GONE);
+                bpmView.setVisibility(View.GONE);
                 genreView.setVisibility(View.GONE);
                 detailsView.setVisibility(View.GONE);
                 priceView.setVisibility(View.GONE);
                 buyButton.setVisibility(View.GONE);
             }
             return  convertView;
+        }
+    }
+
+    // Tab tray
+    private boolean isTrayShowing;
+    public void TrayTabClick(View v){
+        if (isTrayShowing) {
+            hideTabTray();
+        }
+        else showTabTray();
+    }
+    private void showTabTray(){
+        if (!isTrayShowing) {
+            final LinearLayout tabTray = (LinearLayout)findViewById(R.id.tab_tray);
+
+            tabTray.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    hideTabTray();
+                }
+            });
+
+            // Start the animation
+            AnimatorSet set = new AnimatorSet();
+            ObjectAnimator slideRight = ObjectAnimator.ofFloat(tabTray, "TranslationX", -tabTray.findViewById(R.id.tray).getWidth(), 0);
+            set.setInterpolator(new AccelerateDecelerateInterpolator());
+            set.play(slideRight);
+            set.setTarget(tabTray);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    isTrayShowing = true;
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void hideTabTray(){
+        if (isTrayShowing) {
+            LinearLayout tabTray = (LinearLayout) findViewById(R.id.tab_tray);
+
+            // Start the animation
+            AnimatorSet set = new AnimatorSet();
+            ObjectAnimator slideRight = ObjectAnimator.ofFloat(tabTray, "TranslationX", 0, -tabTray.findViewById(R.id.tray).getWidth());
+            set.setInterpolator(new AccelerateDecelerateInterpolator());
+            set.play(slideRight);
+            set.setTarget(tabTray);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    isTrayShowing = false;
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+
+                }
+            });
+            set.start();
         }
     }
 
@@ -726,6 +837,9 @@ public class StoreActivity extends Activity {
                     }
 
                     packPriceList.put(SKU_TWO_DOLLAR_PACK, inv.getSkuDetails(SKU_TWO_DOLLAR_PACK).getPrice());
+                    samplePackListAdapter.notifyDataSetChanged();
+
+                    checkForUnconsumedPurchases();
 
                 }
             });

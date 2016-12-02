@@ -5,4 +5,10 @@
     <color name="transparent">#00000000</color>
     <color name="red">#FF0000</color>
 
+    <color name="primary">#9E9E9E</color>
+    <color name="primary_dark">#212121</color>
+    <color name="primary_accent">#FFB74D</color>
+    <color name="text_primary_dark">#D6000000</color>
+    <color name="text_primary_light">#FFFFFF</color>
+
 </resources>

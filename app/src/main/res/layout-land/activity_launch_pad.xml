@@ -261,7 +261,7 @@
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:background="@android:color/black"
-            android:onClick="SampleLibTabClick">
+            android:onClick="TrayTabClick">
             <ImageView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -336,6 +336,35 @@
                 android:layout_height="0dp"
                 android:layout_weight="1"
                 android:visibility="gone"/>
+            <LinearLayout android:id="@+id/selected_pack_view"
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:visibility="gone">
+                <ImageView android:id="@+id/image_view"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginRight="8dp"
+                    android:layout_gravity="center_vertical"/>
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_gravity="center_vertical">
+                    <TextView android:id="@+id/title_view"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="16sp"
+                        android:text="Title Text"/>
+                    <TextView android:id="@+id/genre_view"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Genre"/>
+                </LinearLayout>
+            </LinearLayout>
             <ExpandableListView android:id="@+id/sample_pack_files_listview"
                 android:layout_width="250dp"
                 android:layout_height="0dp"

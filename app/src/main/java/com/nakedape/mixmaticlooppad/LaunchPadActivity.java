@@ -1581,6 +1581,7 @@ public class LaunchPadActivity extends Activity {
         rootLayout.findViewById(R.id.sample_listview).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
+        rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
     }
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
@@ -1665,6 +1666,29 @@ public class LaunchPadActivity extends Activity {
             convertView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    // Prepare selected pack view
+                    final View selectedView = rootLayout.findViewById(R.id.selected_pack_view);
+                    selectedView.setVisibility(View.VISIBLE);
+                    TextView titleView = (TextView)selectedView.findViewById(R.id.title_view);
+                    titleView.setText(titles.get(position));
+
+                    TextView genreView = (TextView)selectedView.findViewById(R.id.genre_view);
+                    genreView.setText(genres.get(position));
+
+                    File image = new File(new File(samplePackDirectory, names.get(position)), names.get(position) + ".png");
+                    if (image.exists()) {
+                        ImageView imageView = (ImageView)selectedView.findViewById(R.id.image_view);
+                        BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+                        Bitmap bitmap = BitmapFactory.decodeFile(image.getAbsolutePath(), bmOptions);
+                        imageView.setImageBitmap(bitmap);
+                    }
+
+                    selectedView.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            SamplePacksClick(v);
+                        }
+                    });
                     showSamplePackFiles(names.get(position));
                 }
             });
@@ -1674,7 +1698,7 @@ public class LaunchPadActivity extends Activity {
     }
     private void showSamplePackFiles(String name){
         ExpandableListView packListView = (ExpandableListView)rootLayout.findViewById(R.id.sample_pack_files_listview);
-        final SamplePackFilesListAdapter filesListAdapter = new SamplePackFilesListAdapter(context, R.layout.sample_pack_folder_list_item, R.layout.sample_pack_file_list_item);
+        SamplePackFilesListAdapter filesListAdapter = new SamplePackFilesListAdapter(context, R.layout.sample_pack_folder_list_item, R.layout.sample_pack_file_list_item);
         packListView.setAdapter(filesListAdapter);
         filesListAdapter.loadPack(name);
 
