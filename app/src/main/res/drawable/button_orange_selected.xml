@@ -8,7 +8,7 @@
         android:centerY="0.5"
         android:startColor="#fffffac9"
         android:endColor="#ffb900"/>
-    <stroke android:color="#ff9dd0d3"
+    <stroke android:color="@color/primary_accent"
         android:width="4dp"/>
 
     <corners android:radius="5dp" />

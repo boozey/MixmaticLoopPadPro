@@ -22,10 +22,15 @@ import android.net.Uri;
 import android.os.*;
 import android.os.Process;
 import android.preference.PreferenceManager;
+import android.support.annotation.Nullable;
+import android.support.v4.content.res.ResourcesCompat;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.content.res.AppCompatResources;
+import android.support.v7.view.ActionMode;
+import android.support.v7.widget.Toolbar;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
-import android.view.ActionMode;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -53,7 +58,7 @@ import java.util.Calendar;
 import javazoom.jl.converter.WaveFile;
 
 
-public class SampleEditActivity extends Activity {
+public class SampleEditActivity extends AppCompatActivity {
 
     private static final String LOG_TAG = "SampleEditActivity";
 
@@ -119,6 +124,10 @@ public class SampleEditActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sample_edit);
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
+        Toolbar toolbar = (Toolbar)rootLayout.findViewById(R.id.my_toolbar);
+        toolbar.setTitleTextColor(ResourcesCompat.getColor(getResources(), R.color.text_primary_light, null));
+        toolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
+        setSupportActionBar(toolbar);
 
         // Prepare stoarage directory
         if (Utils.isExternalStorageWritable()){
@@ -151,13 +160,7 @@ public class SampleEditActivity extends Activity {
         sampleView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (sampleView.isSelection()) {
-                    if (sampleEditActionMode == null)
-                        sampleEditActionMode = startActionMode(sampleEditActionModeCallback);
-                }
-                else if (sampleEditActionMode != null)
-                    sampleEditActionMode.finish();
-                else
+                if (!sampleView.isSelection())
                     sampleView.clearSelection();
             }
         });
@@ -190,14 +193,8 @@ public class SampleEditActivity extends Activity {
                 setSliceMode(savedData.getNumSlices());
             }
             switch (savedData.getSelectionMode()) {
-                case AudioSampleView.SELECTION_MODE:
-                    // Show the action bar if there is a selection
-                    if ((savedData.getSelectionEndTime() - savedData.getSelectionStartTime()) > 0) {
-                        sampleEditActionMode = startActionMode(sampleEditActionModeCallback);
-                    }
-                    break;
                 case AudioSampleView.BEAT_SELECTION_MODE:
-                    beatEditActionMode = startActionMode(beatEditActionModeCallback);
+                    beatEditActionMode = startSupportActionMode(beatEditActionModeCallback);
             }
             sampleView.loadAudioSampleData(savedData);
             if (savedData.isDecoding())
@@ -336,7 +333,6 @@ public class SampleEditActivity extends Activity {
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
-        final AudioSampleView sample = (AudioSampleView)findViewById(R.id.spectralView);
         switch (id){
             case R.id.action_settings:
                 Intent intent = new Intent(EditPreferencesActivity.SAMPLE_EDIT_PREFS, null, context, EditPreferencesActivity.class);
@@ -345,28 +341,9 @@ public class SampleEditActivity extends Activity {
             case R.id.action_load_file:
                 showNewSamplePopup(0);
                 return true;
-            case R.id.action_edit_beats:
-                enableEditBeatsMode();
-                return true;
-            case R.id.action_resample:
-                startResampleFlow();
-                return true;
-            case R.id.action_pick_color:
-                pickColor();
-                return true;
             case R.id.action_save:
                 Save(null);
                 return true;
-            case R.id.action_select:
-                if (item.isChecked()){
-                    sampleView.setSelectionMode(AudioSampleView.PAN_ZOOM_MODE);
-                    item.setChecked(false);
-                    item.setIcon(R.drawable.ic_action_select);
-                } else {
-                    sampleView.setSelectionMode(AudioSampleView.SELECTION_MODE);
-                    item.setChecked(true);
-                    item.setIcon(R.drawable.ic_action_select_selected);
-                }
             default:
                 return super.onOptionsItemSelected(item);
         }
@@ -692,7 +669,10 @@ public class SampleEditActivity extends Activity {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 if (origSampleFile != null)
-                    saveSample(origSampleFile.getName());
+                    if (origSampleFile.getAbsolutePath().contains("Sample Packs"))
+                        promptForName(origSampleFile.getName().replace(".wav", Calendar.getInstance().getTimeInMillis() + ".wav"));
+                    else
+                        saveSample(origSampleFile.getName());
                 else
                     checkSampleSize();
             }
@@ -724,7 +704,7 @@ public class SampleEditActivity extends Activity {
             builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
-                    promptForName();
+                    promptForName(null);
                 }
             });
             builder.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
@@ -737,14 +717,17 @@ public class SampleEditActivity extends Activity {
             dialog.show();
         }
         else {
-            promptForName();
+            promptForName(null);
         }
     }
-    private void promptForName(){
+    private void promptForName(@Nullable String suggestedName){
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         final View layout = getLayoutInflater().inflate(R.layout.sample_file_name_prompt, null);
         final TextView fileNameTextView = (TextView)layout.findViewById(R.id.file_name_preview);
-        fileNameTextView.setText("Sample_" + Calendar.getInstance().getTimeInMillis() + ".wav");
+        if (suggestedName != null)
+            fileNameTextView.setText(suggestedName);
+        else
+            fileNameTextView.setText("Sample_" + Calendar.getInstance().getTimeInMillis() + ".wav");
         final EditText editText = (EditText)layout.findViewById(R.id.sample_name_text);
         editText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -837,62 +820,38 @@ public class SampleEditActivity extends Activity {
     }
 
     // Sample editing methods
-    private ActionMode.Callback sampleEditActionModeCallback = new ActionMode.Callback() {
-        @Override
-        public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-            MenuInflater inflater = mode.getMenuInflater();
-            inflater.inflate(R.menu.sample_edit_context, menu);
-            return true;
+    public void toolBarClick(View v){
+        switch (v.getId()){
+            case R.id.action_trim_wav:
+                Trim();
+                return;
+            case R.id.action_loop_selection:
+                if (v.isSelected()){
+                    loop = false;
+                    v.setSelected(false);
+                    v.setBackgroundResource(R.drawable.ic_action_av_loop);
+                }
+                else {
+                    loop = true;
+                    v.setSelected(true);
+                    v.setBackgroundResource(R.drawable.ic_action_av_loop_selected);
+                }
+                return;
+            case R.id.action_edit_beats:
+                enableEditBeatsMode();
+                return;
+            case R.id.action_select:
+                if (v.isSelected()){
+                    sampleView.setSelectionMode(AudioSampleView.PAN_ZOOM_MODE);
+                    v.setSelected(false);
+                    v.setBackgroundResource(R.drawable.ic_action_select);
+                } else {
+                    sampleView.setSelectionMode(AudioSampleView.SELECTION_MODE);
+                    v.setSelected(true);
+                    v.setBackgroundResource(R.drawable.ic_action_select_selected);
+                }
         }
-
-        @Override
-        public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-            return false;
-        }
-
-        @Override
-        public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-            switch (item.getItemId()){
-                case R.id.action_trim_wav:
-                    Trim();
-                    return true;
-                case R.id.action_loop_selection:
-                    if (item.isChecked()){
-                        loop = false;
-                        item.setChecked(false);
-                        item.setIcon(R.drawable.ic_action_av_loop);
-                    }
-                    else {
-                        loop = true;
-                        item.setChecked(true);
-                        item.setIcon(R.drawable.ic_action_av_loop_selected);
-                    }
-                    return true;
-                case R.id.action_save_selection:
-                    saveSlice = true;
-                    Save(null);
-                    return true;
-            }
-            return false;
-        }
-
-        @Override
-        public void onDestroyActionMode(ActionMode mode) {
-            sampleEditActionMode = null;
-            sampleView.clearSelection();
-            saveSlice = false;
-
-            // Put the sample view back in pan zoom mode
-            sampleView.setSelectionMode(AudioSampleView.PAN_ZOOM_MODE);
-            // Deselect action bar item and icon
-            MenuItem selectItem = actionBarMenu.findItem(R.id.action_select);
-            if (selectItem.isChecked()) {
-                selectItem.setChecked(false);
-                selectItem.setIcon(R.drawable.ic_action_select);
-            }
-            loop = false;
-        }
-    };
+    }
     public void Trim(){
         continuePlaying = false;
         if (mPlayer != null) {
@@ -962,7 +921,7 @@ public class SampleEditActivity extends Activity {
             showBeats();
         }
         if (beatEditActionMode == null) {
-            beatEditActionMode = startActionMode(beatEditActionModeCallback);
+            beatEditActionMode = startSupportActionMode(beatEditActionModeCallback);
         }
         sampleView.setSelectionMode(AudioSampleView.BEAT_SELECTION_MODE);
     }

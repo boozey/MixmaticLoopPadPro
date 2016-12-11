@@ -52,6 +52,7 @@
     <string name="account_explanation">Sign in with your email address or Google account.
         This will keep track of your purchases across devices and allow you to re-download sample packs.
         Without an account, you will be responsible for saving or transferring any files that have been purchased and downloaded.</string>
+    <string name="store_error_msg">Unable to contact Google Billing</string>
 
     <!-- Strings for Sample Edit Activity main menu -->
     <string name="action_trim_wav">Trim to selection</string>
@@ -103,6 +104,7 @@
     <string name="color_dialog_title">Pick a color</string>
     <string name="action_set_volume">Volume</string>
     <string name="action_reset">Reset recording</string>
+    <string name="button_done">Done</string>
 
     <!-- Delete sample dialog strings -->
     <string name="remove_sample_dialog_title">Remove sample</string>

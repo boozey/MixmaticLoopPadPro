@@ -2,11 +2,20 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/launch_pad_root_layout">
+    android:id="@+id/launch_pad_root_layout"
+    android:background="@color/md_black_1000">
+    <android.support.v7.widget.Toolbar
+        android:id="@+id/my_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        android:theme="@style/ActionBarTheme"/>
 <LinearLayout
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    android:layout_marginRight="30dp"
+    android:layout_marginRight="33dp"
+    android:layout_below="@id/my_toolbar"
     android:orientation="vertical"
     android:id="@+id/mainLayout">
 
@@ -267,13 +276,14 @@
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_alignParentRight="true"
-        android:background="#99000000"
+        android:layout_below="@id/my_toolbar"
+        android:background="@color/primary"
         android:visibility="visible"
         android:translationX="250dp">
         <RelativeLayout
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:background="#000000"
+            android:background="@color/primary"
             android:onClick="SampleLibTabClick">
             <ImageView
                 android:layout_width="wrap_content"
@@ -305,13 +315,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:padding="8dp"
-                android:orientation="horizontal"
-                android:background="@android:color/black">
+                android:orientation="horizontal">
                 <TextView android:id="@+id/my_samples_button"
                     android:layout_width="0dp"
                     android:layout_weight="10"
                     android:layout_height="wrap_content"
                     android:text="@string/my_samples_underlined"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary_light"
                     android:onClick="MySamplesClick"
                     android:clickable="true"/>
                 <TextView android:id="@+id/sample_packs_button"
@@ -319,6 +330,8 @@
                     android:layout_weight="12"
                     android:layout_height="wrap_content"
                     android:text="@string/sample_packs"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary_light"
                     android:onClick="SamplePacksClick"
                     android:clickable="true"/>
             </LinearLayout>
@@ -326,15 +339,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom"
+                android:padding="4dp"
                 android:drawableStart="@drawable/ic_shopping_bag_40dp"
                 android:drawableLeft="@drawable/ic_shopping_bag_40dp"
                 android:drawablePadding="8dp"
                 android:layout_margin="16dp"
                 android:maxWidth="250dp"
                 android:text="@string/no_sample_packs_msg"
+                android:textColor="@color/text_primary_light"
                 android:textSize="20sp"
                 android:textAlignment="center"
-                android:visibility="visible"
+                android:background="@drawable/rounded_corner_accent"
+                android:visibility="gone"
                 android:onClick="OpenStore"
                 android:clickable="true"/>
             <ListView
@@ -371,10 +387,12 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:textSize="16sp"
+                        android:textColor="@color/text_primary_light"
                         android:text="Title Text"/>
                     <TextView android:id="@+id/genre_view"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary_light"
                         android:text="Genre"/>
                 </LinearLayout>
             </LinearLayout>
@@ -382,7 +400,69 @@
                 android:layout_width="250dp"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:visibility="gone"/>
+                android:visibility="gone"
+                android:groupIndicator="@drawable/expandable_list_indicator_white"/>
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Touchpad Toolbar-->
+    <LinearLayout android:id="@+id/pad_toolbar"
+        android:layout_width="44dp"
+        android:layout_height="wrap_content"
+        android:padding="2dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_centerVertical="true"
+        android:background="@color/primary_dark"
+        android:translationX="-44dp"
+        android:visibility="visible">
+        <ImageButton android:id="@+id/action_edit_sample"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:background="@drawable/ic_action_editor_mode_edit"
+            android:onClick="toolBarClick"/>
+        <ImageButton android:id="@+id/action_loop_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:background="@drawable/ic_action_av_loop"
+            android:onClick="toolBarClick"/>
+        <ImageButton android:id="@+id/action_launch_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:background="@drawable/ic_keyboard"
+            android:onClick="toolBarClick"/>
+        <ImageButton android:id="@+id/action_set_volume"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:background="@drawable/ic_av_equalizer"
+            android:onClick="toolBarClick"/>
+        <ImageButton android:id="@+id/action_pick_color"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="4dp"
+            android:background="@drawable/ic_palette"
+            android:onClick="toolBarClick"/>
+        <ImageButton android:id="@+id/action_remove_sample"
+            android:layout_width="wrap_content"
+            android:layout_margin="4dp"
+            android:layout_height="wrap_content"
+            android:background="@drawable/ic_action_delete"
+            android:onClick="toolBarClick"/>
+    </LinearLayout>
+    <Button android:id="@+id/done_button"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginBottom="8dp"
+        android:paddingLeft="@dimen/activity_horizontal_margin"
+        android:paddingRight="@dimen/activity_horizontal_margin"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:translationY="48dp"
+        android:background="@drawable/rounded_corner_accent"
+        android:text="@string/button_done"
+        android:onClick="DoneButtonClick"/>
 </RelativeLayout>

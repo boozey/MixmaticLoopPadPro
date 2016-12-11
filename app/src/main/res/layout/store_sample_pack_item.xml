@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout  xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:android="http://schemas.android.com/apk/res/android" >
+<LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="16dp"
+    android:background="@drawable/store_item_background">
 
     <TextView android:id="@+id/title_view"
         android:layout_width="match_parent"
@@ -15,36 +19,43 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical">
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
     <ImageView android:id="@+id/image_view"
         android:layout_width="100dp"
         android:layout_height="100dp"
         android:layout_marginEnd="8dp"
         android:layout_marginRight="8dp"
-        android:layout_gravity="center_vertical"
+        android:layout_centerInParent="true"
         android:visibility="visible"/>
-    <ProgressBar android:id="@+id/loading_circle_spinner"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:layout_marginRight="8dp"/>
+        <ImageButton android:id="@+id/preview_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:background="@drawable/button_play_large"
+            android:visibility="gone"/>
+    </RelativeLayout>
     <LinearLayout
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:layout_gravity="center_vertical">
         <TextView android:id="@+id/bpm_view"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content" />
         <TextView android:id="@+id/genre_view"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"/>
         <TextView android:id="@+id/details_view"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"/>
     </LinearLayout>
     <LinearLayout android:orientation="vertical"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
         android:gravity="center_horizontal">
         <TextView android:id="@+id/price_view"
             android:layout_width="wrap_content"
@@ -53,22 +64,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/buy"
+            android:background="@drawable/rounded_corner_accent"
+            android:textColor="@color/text_primary_light"
             android:visibility="gone"/>
     </LinearLayout>
     </LinearLayout>
-    <LinearLayout android:id="@+id/status_bar_linear_layout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:visibility="gone">
-        <TextView android:id="@+id/status_textview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/downloading"/>
-        <ProgressBar android:id="@+id/progressBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="100"
-            style="@style/Widget.AppCompat.SeekBar" />
-    </LinearLayout>
 </LinearLayout>
+    <ProgressBar android:id="@+id/loading_circle_spinner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_centerInParent="true"/>
+</RelativeLayout>

@@ -46,8 +46,12 @@
         </activity>
         <activity
             android:name=".EditPreferencesActivity"
-            android:label="@string/title_activity_sample_edit_preferences"></activity>
-        <activity android:name=".StoreActivity"></activity>
+            android:label="@string/title_activity_sample_edit_preferences">
+
+        </activity>
+        <activity android:name=".StoreActivity">
+
+        </activity>
     </application>
 
 </manifest>

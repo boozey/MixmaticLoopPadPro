@@ -8,6 +8,7 @@
     android:paddingStart="?android:attr/expandableListPreferredItemPaddingLeft"
     android:textSize="18sp"
     android:text="Folder"
+    android:textColor="@color/text_primary_light"
     android:id="@+id/textView">
 
 </TextView>

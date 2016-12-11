@@ -2,28 +2,33 @@ package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.os.Bundle;
+import android.support.design.widget.BottomNavigationView;
+import android.support.design.widget.Snackbar;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
@@ -61,7 +66,7 @@ import IABUtils.IabResult;
 import IABUtils.Inventory;
 import IABUtils.Purchase;
 
-public class StoreActivity extends Activity {
+public class StoreActivity extends AppCompatActivity {
 
     public final static String ACCOUNT_PREFS = "ACCOUNT_PREFS";
     public final static String AUTO_SIGNIN = "AUTO_SIGNIN";
@@ -85,6 +90,22 @@ public class StoreActivity extends Activity {
         setContentView(R.layout.activity_store);
         context = this;
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
+
+        // Initialize navigation bar
+        BottomNavigationView.OnNavigationItemSelectedListener navListener = new BottomNavigationView.OnNavigationItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                return onNavigation(item);
+            }
+        };
+        BottomNavigationView navView = (BottomNavigationView)findViewById(R.id.bottom_navigation);
+        navView.setOnNavigationItemSelectedListener(navListener);
+
+        // Setup toolbar
+        Toolbar toolbar = (Toolbar) findViewById(R.id.my_toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowHomeEnabled(true);
 
         // Initialize price list with default values
         packPriceList = new HashMap<>();
@@ -192,6 +213,12 @@ public class StoreActivity extends Activity {
         if (authStateListener != null) {
             mAuth.removeAuthStateListener(authStateListener);
         }
+        if (mediaPlayer != null){
+            if (mediaPlayer.isPlaying())
+                mediaPlayer.stop();
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
     }
 
     @Override
@@ -219,7 +246,7 @@ public class StoreActivity extends Activity {
                 if (restartPurchaseFlow) {
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user != null)
-                        makePurchase(user.getUid(), savedSku, savedPackName, savedStatusBar);
+                        makePurchase(user.getUid(), savedSku, savedPackName);
                 }
                 return;
             }
@@ -261,148 +288,13 @@ public class StoreActivity extends Activity {
     }
 
     // Store
+    private MediaPlayer mediaPlayer;
+    private Snackbar snackbar;
     private ArrayList<String> availPacks;
     private ArrayList<String> ownedPacks;
+    private PurchasesListAdapter purchasesListAdapter;
     private int storeWindowSize = 5;
     private int storeIndex = 0;
-    private void LoadStoreData(byte[] indexBytes){
-        storeIndex = 0;
-        storeWindowSize = 5;
-        String indexText;
-        try {
-            indexText = new String(indexBytes, "UTF-8");
-            String[] strings = indexText.split("\n");
-            availPacks = new ArrayList<>(strings.length);
-            for (String s : strings){
-                availPacks.add(s.trim());
-                Log.d(LOG_TAG, s);
-            }
-            setupFolders();
-            samplePackListAdapter = new SamplePackListAdapter(this, R.layout.store_sample_pack_item);
-            ListView packListView = (ListView)findViewById(R.id.store_item_list);
-            packListView.setAdapter(samplePackListAdapter);
-            packListView.setOnScrollListener(new AbsListView.OnScrollListener() {
-                @Override
-                public void onScrollStateChanged(AbsListView view, int scrollState) {
-                    if (view.getLastVisiblePosition() >= samplePackListAdapter.getCount() - 1)
-                        downloadNextInfoSet();
-                }
-
-                @Override
-                public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
-
-                }
-            });
-
-            rootLayout.findViewById(R.id.center_progress_bar).setVisibility(View.GONE);
-            downloadNextInfoSet();
-
-        } catch (UnsupportedEncodingException e){
-            e.printStackTrace();
-            Log.e(LOG_TAG, "Error loading index");
-        }
-    }
-    private void downloadNextInfoSet(){
-        // Check if data is already cached.  If not, download
-        ArrayList<String> cachedPacks = new ArrayList<>(Arrays.asList(cacheFolder.list(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String filename) {
-                if (filename.contains(".txt")){
-                    if (availPacks.contains(filename.replace(".txt", ""))) {
-                        Log.d(LOG_TAG, "Cached pack: " + filename);
-                        return true;
-                    } else
-                        return false;
-                } else
-                    return false;
-            }
-        })));
-        for (int i = storeIndex; i < storeIndex + storeWindowSize && i < availPacks.size(); i++){
-            final String packName = availPacks.get(i);
-            samplePackListAdapter.addPack(packName);
-            if (cachedPacks.contains(packName + ".txt")){
-                samplePackListAdapter.addPackDetails(packName);
-            }
-            else {
-                File desc = new File(cacheFolder, packName + ".txt");
-                try {
-                    desc.createNewFile();
-                    StorageReference descRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + packName + ".txt"); //packFolderRef.child(pack + ".txt");
-                    descRef.getFile(desc).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
-                        @Override
-                        public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
-                            samplePackListAdapter.addPackDetails(packName);
-                            File image = new File(cacheFolder, packName + ".png");
-                            try {
-                                image.createNewFile();
-                                StorageReference imageRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + packName + ".png"); //packFolderRef.child(pack + ".png");
-                                imageRef.getFile(image).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
-                                    @Override
-                                    public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
-                                        samplePackListAdapter.notifyDataSetChanged();
-                                    }
-                                });
-                            } catch (IOException e){
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                } catch (IOException e){
-                    e.printStackTrace();
-                }
-            }
-        }
-        storeIndex += storeWindowSize;
-        storeIndex = Math.min(storeIndex, availPacks.size());
-    }
-    private void LoadPurchaseRec(byte[] purchListBytes){
-        // Processs remote purchase record
-        try{
-            String purchasesTextDL;
-            purchasesTextDL = new String(purchListBytes, "UTF-8");
-            String[] packNameArray = purchasesTextDL.split("\n");
-            ownedPacks = new ArrayList<>(packNameArray.length);
-            for (String s : packNameArray)
-                ownedPacks.add(s.trim());
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-            Log.e(LOG_TAG, "Error reading remote purchase list");
-        }
-
-        // Save remote purchase record locally
-        File recordFile = new File(getFilesDir(), "purchases.txt");
-        try {
-            if (recordFile.exists()) recordFile.delete();
-            else recordFile.createNewFile();
-            FileWriter writer = new FileWriter(recordFile);
-            for (String packName : ownedPacks) {
-                writer.append(packName + "\n");
-            }
-            writer.flush();
-            writer.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-            Log.e(LOG_TAG, "Error writing local purchase record");
-        }
-
-    }
-    private void LoadLocalPurchaseRec(){
-        ownedPacks = new ArrayList<>();
-        File recordFile = new File(getFilesDir(), "purchases.txt");
-        if (recordFile.exists()){
-            try {
-                BufferedReader reader = new BufferedReader(new FileReader(recordFile));
-                String line;
-                while ((line = reader.readLine()) != null){
-                    ownedPacks.add(line.trim());
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                Log.e(LOG_TAG, "Error reading local purchase record");
-            }
-        }
-    }
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
         private ArrayList<String> titles;
@@ -493,6 +385,7 @@ public class StoreActivity extends Activity {
             TextView detailsView = (TextView)convertView.findViewById(R.id.details_view);
             TextView priceView = (TextView)convertView.findViewById(R.id.price_view);
             Button buyButton = (Button)convertView.findViewById(R.id.purchase_button);
+            final ImageButton prevButton = (ImageButton)convertView.findViewById(R.id.preview_button);
 
             if (titles.get(position) != null) {
                 loadingBar.setVisibility(View.GONE);
@@ -512,14 +405,13 @@ public class StoreActivity extends Activity {
                 priceView.setVisibility(View.VISIBLE);
                 priceView.setText(packPriceList.get(skus.get(position)));
 
-                final View statusBar = convertView.findViewById(R.id.status_bar_linear_layout);
                 buyButton.setVisibility(View.VISIBLE);
                 if ((ownedPacks != null && ownedPacks.contains(names.get(position))) || BuildConfig.DEBUG){
                     buyButton.setText(R.string.download);
                     buyButton.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            downloadPack(statusBar, names.get(position));
+                            downloadPack(names.get(position));
                         }
                     });
                 } else {
@@ -527,7 +419,7 @@ public class StoreActivity extends Activity {
                     buyButton.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            startPurchaseFlow(skus.get(position), statusBar, names.get(position));
+                            startPurchaseFlow(skus.get(position), names.get(position));
                         }
                     });
                 }
@@ -540,6 +432,14 @@ public class StoreActivity extends Activity {
                     //bitmap = Bitmap.createScaledBitmap(bitmap,parent.getWidth(),parent.getHeight(),true);
                     imageView.setImageBitmap(bitmap);
                 }
+
+                prevButton.setVisibility(View.VISIBLE);
+                prevButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                            previewClick(names.get(position), titles.get(position));
+                    }
+                });
             } else {
                 loadingBar.setVisibility(View.VISIBLE);
                 titleView.setVisibility(View.GONE);
@@ -548,93 +448,471 @@ public class StoreActivity extends Activity {
                 detailsView.setVisibility(View.GONE);
                 priceView.setVisibility(View.GONE);
                 buyButton.setVisibility(View.GONE);
+                prevButton.setVisibility(View.GONE);
+            }
+            return  convertView;
+        }
+    }
+    private class PurchasesListAdapter extends BaseAdapter {
+        private ArrayList<String> names;
+        private ArrayList<String> titles;
+        private ArrayList<String> skus;
+        private Context mContext;
+        private int resource_id;
+        private LayoutInflater mInflater;
+
+        private PurchasesListAdapter(Context context, int resource_id) {
+            this.mContext = context;
+            this.resource_id = resource_id;
+            mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            names = new ArrayList<>();
+            titles = new ArrayList<>();
+            skus = new ArrayList<>();
+        }
+
+        private void addPack(String name){
+            names.add(name);
+            titles.add(null);
+            skus.add(null);
+            notifyDataSetChanged();
+            Log.d(LOG_TAG, "Owned pack added");
+        }
+
+        private void addPacks(ArrayList<String> packs){
+            for (String p : packs){
+                addPack(p);
+                File detailsFile = new File(cacheFolder, p + ".txt");
+                if (detailsFile.exists())
+                    addPackDetails(p);
+                else
+                    downloadInfo(p);
+            }
+        }
+
+        private void addItem(String name){
+
+        }
+
+        private void addPackDetails(String name){
+            File desc = new File(cacheFolder, name + ".txt");
+            int index = names.indexOf(name);
+            if (desc.exists() && index >= 0) {
+                try {
+                    BufferedReader br = new BufferedReader(new FileReader(desc));
+                    titles.set(index, br.readLine());
+                    skus.set(index, br.readLine());
+                    br.close();
+                    notifyDataSetChanged();
+                }
+                catch (IOException e) {
+                    //You'll need to add proper error handling here
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        @Override
+        public int getCount() {
+            if (names != null)
+                return names.size();
+            else return 0;
+        }
+
+        @Override
+        public String getItem(int position) {
+            return names.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(final int position, View convertView, final ViewGroup parent) {
+            if (convertView == null) {
+                convertView = mInflater.inflate(resource_id, null);
+            }
+
+            ProgressBar loadingBar = (ProgressBar)convertView.findViewById(R.id.loading_circle_spinner);
+            TextView titleView = (TextView)convertView.findViewById(R.id.title_view);
+            Button buyButton = (Button)convertView.findViewById(R.id.download_button);
+
+            if (titles.get(position) != null) {
+                loadingBar.setVisibility(View.GONE);
+
+                titleView.setVisibility(View.VISIBLE);
+                titleView.setText(titles.get(position));
+
+                buyButton.setVisibility(View.VISIBLE);
+                buyButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        downloadPack(names.get(position));
+                    }
+                });
+
+                File image = new File(cacheFolder, names.get(position) + ".png");
+                if (image.exists()) {
+                    ImageView imageView = (ImageView)convertView.findViewById(R.id.image_view);
+                    BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+                    Bitmap bitmap = BitmapFactory.decodeFile(image.getAbsolutePath(), bmOptions);
+                    //bitmap = Bitmap.createScaledBitmap(bitmap,parent.getWidth(),parent.getHeight(),true);
+                    imageView.setImageBitmap(bitmap);
+                }
+            } else {
+                loadingBar.setVisibility(View.VISIBLE);
+                titleView.setVisibility(View.GONE);
+                buyButton.setVisibility(View.GONE);
             }
             return  convertView;
         }
     }
 
-    // Tab tray
-    private boolean isTrayShowing;
-    public void TrayTabClick(View v){
-        if (isTrayShowing) {
-            hideTabTray();
-        }
-        else showTabTray();
-    }
-    private void showTabTray(){
-        if (!isTrayShowing) {
-            final LinearLayout tabTray = (LinearLayout)findViewById(R.id.tab_tray);
-
-            tabTray.setOnClickListener(new View.OnClickListener() {
+    private void LoadStoreData(byte[] indexBytes){
+        storeIndex = 0;
+        storeWindowSize = 5;
+        String indexText;
+        try {
+            indexText = new String(indexBytes, "UTF-8");
+            String[] strings = indexText.split("\n");
+            availPacks = new ArrayList<>(strings.length);
+            for (String s : strings){
+                availPacks.add(s.trim());
+                Log.d(LOG_TAG, s);
+            }
+            setupFolders();
+            samplePackListAdapter = new SamplePackListAdapter(this, R.layout.store_sample_pack_item);
+            ListView packListView = (ListView)findViewById(R.id.sample_pack_listview);
+            packListView.setAdapter(samplePackListAdapter);
+            packListView.setOnScrollListener(new AbsListView.OnScrollListener() {
                 @Override
-                public void onClick(View v) {
-                    hideTabTray();
+                public void onScrollStateChanged(AbsListView view, int scrollState) {
+                    if (view.getLastVisiblePosition() >= samplePackListAdapter.getCount() - 1)
+                        downloadNextInfoSet();
+                }
+
+                @Override
+                public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+
                 }
             });
 
-            // Start the animation
-            AnimatorSet set = new AnimatorSet();
-            ObjectAnimator slideRight = ObjectAnimator.ofFloat(tabTray, "TranslationX", -tabTray.findViewById(R.id.tray).getWidth(), 0);
-            set.setInterpolator(new AccelerateDecelerateInterpolator());
-            set.play(slideRight);
-            set.setTarget(tabTray);
+            rootLayout.findViewById(R.id.center_progress_bar).setVisibility(View.GONE);
+            downloadNextInfoSet();
+
+        } catch (UnsupportedEncodingException e){
+            e.printStackTrace();
+            Log.e(LOG_TAG, "Error loading index");
+        }
+    }
+    private void downloadNextInfoSet(){
+        // Check if data is already cached.  If not, download
+        ArrayList<String> cachedPacks = new ArrayList<>(Arrays.asList(cacheFolder.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String filename) {
+                if (filename.contains(".txt")){
+                    if (availPacks.contains(filename.replace(".txt", ""))) {
+                        Log.d(LOG_TAG, "Cached pack: " + filename);
+                        return true;
+                    } else
+                        return false;
+                } else
+                    return false;
+            }
+        })));
+        for (int i = storeIndex; i < storeIndex + storeWindowSize && i < availPacks.size(); i++){
+            final String packName = availPacks.get(i);
+            samplePackListAdapter.addPack(packName);
+            if (cachedPacks.contains(packName + ".txt")){
+                samplePackListAdapter.addPackDetails(packName);
+            }
+            else {
+                downloadInfo(packName);
+            }
+        }
+        storeIndex += storeWindowSize;
+        storeIndex = Math.min(storeIndex, availPacks.size());
+    }
+    private void downloadInfo(final String packName){
+        File desc = new File(cacheFolder, packName + ".txt");
+        try {
+            desc.createNewFile();
+            StorageReference descRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + packName + ".txt"); //packFolderRef.child(pack + ".txt");
+            descRef.getFile(desc).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
+                @Override
+                public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
+                    samplePackListAdapter.addPackDetails(packName);
+                    if (purchasesListAdapter != null)
+                        purchasesListAdapter.addPackDetails(packName);
+                    File image = new File(cacheFolder, packName + ".png");
+                    try {
+                        image.createNewFile();
+                        StorageReference imageRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + packName + ".png"); //packFolderRef.child(pack + ".png");
+                        imageRef.getFile(image).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
+                            @Override
+                            public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
+                                samplePackListAdapter.notifyDataSetChanged();
+                                if (purchasesListAdapter != null)
+                                    purchasesListAdapter.notifyDataSetChanged();
+                            }
+                        });
+                    } catch (IOException e){
+                        e.printStackTrace();
+                    }
+                }
+            });
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+    }
+    private void LoadPurchaseRec(byte[] purchListBytes){
+        // Processs remote purchase record
+        try{
+            String purchasesTextDL;
+            purchasesTextDL = new String(purchListBytes, "UTF-8");
+            String[] packNameArray = purchasesTextDL.split("\n");
+            ownedPacks = new ArrayList<>(packNameArray.length);
+            for (String s : packNameArray)
+                ownedPacks.add(s.trim());
+
+            Log.d(LOG_TAG, "ownedPacks = " + ownedPacks.size());
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            Log.e(LOG_TAG, "Error reading remote purchase list");
+        }
+
+        // Save remote purchase record locally
+        if (ownedPacks != null) {
+            File recordFile = new File(getFilesDir(), "purchases.txt");
+            try {
+                if (recordFile.exists()) recordFile.delete();
+                else recordFile.createNewFile();
+                FileWriter writer = new FileWriter(recordFile);
+                for (String packName : ownedPacks) {
+                    writer.append(packName + "\n");
+                }
+                writer.flush();
+                writer.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(LOG_TAG, "Error writing local purchase record");
+            }
+        }
+    }
+    private void LoadLocalPurchaseRec(){
+        Log.d(LOG_TAG, "Loading Local Purchase Record");
+        ownedPacks = new ArrayList<>();
+        File recordFile = new File(getFilesDir(), "purchases.txt");
+        if (recordFile.exists()){
+            try {
+                BufferedReader reader = new BufferedReader(new FileReader(recordFile));
+                String line;
+                while ((line = reader.readLine()) != null){
+                    ownedPacks.add(line.trim());
+                }
+
+                Log.d(LOG_TAG, "ownedPacks = " + ownedPacks.size());
+
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(LOG_TAG, "Error reading local purchase record");
+            }
+        } else
+            Log.d(LOG_TAG, "No local purchase record found");
+    }
+    private boolean onNavigation(MenuItem item){
+        switch(item.getItemId()){
+            case R.id.nav_sample_packs:
+                hidePurchases();
+                showSamplePacks();
+                return true;
+            case R.id.nav_purchases:
+                hideSamplePacks();
+                showPurchases();
+                return true;
+        }
+        return true;
+    }
+    private void showSamplePacks(){
+        final ListView sampleList = (ListView)rootLayout.findViewById(R.id.sample_pack_listview);
+        if (sampleList.getVisibility() != View.VISIBLE){
+            AnimatorSet set = Animations.fadeIn(sampleList, 200, 0);
             set.addListener(new Animator.AnimatorListener() {
                 @Override
-                public void onAnimationStart(Animator animation) {
+                public void onAnimationStart(Animator animator) {
+                    sampleList.setVisibility(View.VISIBLE);
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
 
                 }
 
                 @Override
-                public void onAnimationEnd(Animator animation) {
-                    isTrayShowing = true;
-                }
-
-                @Override
-                public void onAnimationCancel(Animator animation) {
+                public void onAnimationCancel(Animator animator) {
 
                 }
 
                 @Override
-                public void onAnimationRepeat(Animator animation) {
+                public void onAnimationRepeat(Animator animator) {
 
                 }
             });
             set.start();
         }
     }
-    private void hideTabTray(){
-        if (isTrayShowing) {
-            LinearLayout tabTray = (LinearLayout) findViewById(R.id.tab_tray);
-
-            // Start the animation
-            AnimatorSet set = new AnimatorSet();
-            ObjectAnimator slideRight = ObjectAnimator.ofFloat(tabTray, "TranslationX", 0, -tabTray.findViewById(R.id.tray).getWidth());
-            set.setInterpolator(new AccelerateDecelerateInterpolator());
-            set.play(slideRight);
-            set.setTarget(tabTray);
+    private void hideSamplePacks(){
+        final ListView sampleList = (ListView)rootLayout.findViewById(R.id.sample_pack_listview);
+        if (sampleList.getVisibility() == View.VISIBLE){
+            AnimatorSet set = Animations.fadeOut(sampleList, 200, 0);
             set.addListener(new Animator.AnimatorListener() {
                 @Override
-                public void onAnimationStart(Animator animation) {
+                public void onAnimationStart(Animator animator) {
 
                 }
 
                 @Override
-                public void onAnimationEnd(Animator animation) {
-                    isTrayShowing = false;
+                public void onAnimationEnd(Animator animator) {
+                    sampleList.setVisibility(View.GONE);
                 }
 
                 @Override
-                public void onAnimationCancel(Animator animation) {
+                public void onAnimationCancel(Animator animator) {
 
                 }
 
                 @Override
-                public void onAnimationRepeat(Animator animation) {
+                public void onAnimationRepeat(Animator animator) {
 
                 }
             });
             set.start();
         }
+    }
+    private void showPurchases(){
+        final ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
+        if (purchasesListAdapter == null){
+            purchasesListAdapter = new PurchasesListAdapter(context, R.layout.store_purchase_item);
+            purchasesListAdapter.addPacks(ownedPacks);
+            purchasesList.setAdapter(purchasesListAdapter);
+        }
+        if (purchasesList.getVisibility() != View.VISIBLE){
+            AnimatorSet set = Animations.fadeIn(purchasesList, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+                    purchasesList.setVisibility(View.VISIBLE);
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void hidePurchases(){
+        final ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
+        if (purchasesList.getVisibility() == View.VISIBLE){
+            AnimatorSet set = Animations.fadeOut(purchasesList, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    purchasesList.setVisibility(View.GONE);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void previewClick(String packName, final String packTitle){
+        // Dismiss snackbar if necessary
+        if (snackbar != null && snackbar.isShown())
+            snackbar.dismiss();
+
+        // Prepare and show snackbar
+        snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), "Buffering", Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction(R.string.action_stop, new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (mediaPlayer != null ) {
+                    if (mediaPlayer.isPlaying())
+                        mediaPlayer.stop();
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
+                snackbar.dismiss();
+            }
+        });
+        snackbar.setCallback(new Snackbar.Callback() {
+            @Override
+            public void onDismissed(Snackbar snackbar, int event) {
+                if (mediaPlayer != null ) {
+                    if (mediaPlayer.isPlaying())
+                        mediaPlayer.stop();
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
+                super.onDismissed(snackbar, event);
+            }
+        });
+        snackbar.show();
+
+        // Prepare and start streaming
+        String previewName = packName.substring(0, packName.indexOf("bpm") + 3) + "_Preview.mp3";
+        StorageReference prevRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + previewName);
+        prevRef.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+            @Override
+            public void onSuccess(Uri uri) {
+                mediaPlayer = new MediaPlayer();
+                mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mediaPlayer) {
+                        snackbar.dismiss();
+                    }
+                });
+                try {
+                    mediaPlayer.setDataSource(uri.toString());
+                    mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                        @Override
+                        public void onPrepared(MediaPlayer mediaPlayer) {
+                            snackbar.setText(packTitle);
+                            mediaPlayer.start();
+                        }
+                    });
+                    mediaPlayer.prepareAsync();
+                } catch (IOException e){
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     // Firebase user account
@@ -727,7 +1005,7 @@ public class StoreActivity extends Activity {
                 if (restartPurchaseFlow){
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user != null)
-                        makePurchase(user.getUid(), savedSku, savedPackName, savedStatusBar);
+                        makePurchase(user.getUid(), savedSku, savedPackName);
                 }
             }
         });
@@ -745,7 +1023,6 @@ public class StoreActivity extends Activity {
     private static String SKU_TWO_DOLLAR_PACK = "two_dollar_pack";
     private static HashMap<String, String> packPriceList;
     private String savedSku, savedPackName;
-    private View savedStatusBar;
     private boolean restartPurchaseFlow = false;
 
     private void checkForUnconsumedPurchases(){
@@ -753,7 +1030,7 @@ public class StoreActivity extends Activity {
             mBillingHelper.queryInventoryAsync(new IabHelper.QueryInventoryFinishedListener() {
                 @Override
                 public void onQueryInventoryFinished(IabResult result, Inventory inv) {
-                    if (inv.hasPurchase(SKU_TWO_DOLLAR_PACK))
+                    if (result.isSuccess() && inv.hasPurchase(SKU_TWO_DOLLAR_PACK))
                         try {
                             mBillingHelper.consumeAsync(inv.getPurchase(SKU_TWO_DOLLAR_PACK), new IabHelper.OnConsumeFinishedListener() {
                                 @Override
@@ -766,13 +1043,15 @@ public class StoreActivity extends Activity {
             });
         } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
     }
-    private void downloadPack(final View statusBar, final String name){
-        //Toast.makeText(context, "Downloading sample pack ...", Toast.LENGTH_SHORT).show();
-        statusBar.setVisibility(View.VISIBLE);
-
-        TextView statusView = (TextView)statusBar.findViewById(R.id.status_textview);
-        statusView.setText(R.string.downloading);
-
+    private void downloadPack(final String name){
+        final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), "Downloading sample pack", Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction("Dismiss", new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                snackbar.dismiss();
+            }
+        });
+        snackbar.show();
         final File downloadFile = new File(samplePackFolder, name + ".zip");
         if (downloadFile.exists()) downloadFile.delete();
         try {
@@ -781,11 +1060,6 @@ public class StoreActivity extends Activity {
             downloadRef.getFile(downloadFile).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
                 @Override
                 public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
-                    //Toast.makeText(context, "Decompressing zip archive ...", Toast.LENGTH_SHORT).show();
-                    final ProgressBar progressBar = (ProgressBar)statusBar.findViewById(R.id.progressBar);
-                    progressBar.setIndeterminate(true);
-                    final TextView statusText = (TextView)statusBar.findViewById(R.id.status_textview);
-                    statusText.setText(R.string.decompressing);
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
@@ -795,12 +1069,14 @@ public class StoreActivity extends Activity {
                                 runOnUiThread(new Runnable() {
                                     @Override
                                     public void run() {
-                                        //Toast.makeText(context, "Decompression complete", Toast.LENGTH_SHORT).show();
-                                        progressBar.setVisibility(View.INVISIBLE);
-                                        statusText.setText(R.string.downloaded);
+                                        snackbar.dismiss();
+                                        Snackbar.make(findViewById(R.id.coordinator_layout), "Sample pack installed", Snackbar.LENGTH_LONG).show();
+                                        if (BuildConfig.DEBUG)
+                                            updatePurchaseRecord(name);
                                     }
                                 });
                             } catch (IOException e){
+                                snackbar.dismiss();
                                 Toast.makeText(context, "Error decompressing zip file", Toast.LENGTH_SHORT).show();
                                 e.printStackTrace();
                             }
@@ -808,17 +1084,9 @@ public class StoreActivity extends Activity {
                         }
                     }).start();
                 }
-            }).addOnProgressListener(new OnProgressListener<FileDownloadTask.TaskSnapshot>() {
-                @Override
-                public void onProgress(FileDownloadTask.TaskSnapshot taskSnapshot) {
-                    ProgressBar progressBar = (ProgressBar)statusBar.findViewById(R.id.progressBar);
-                    if (progressBar.isIndeterminate()) progressBar.setIndeterminate(false);
-
-                    int percent = (int)(taskSnapshot.getBytesTransferred() * 100 / taskSnapshot.getTotalByteCount());
-                    progressBar.setProgress(percent);
-                }
             });
         } catch (IOException e){
+            snackbar.dismiss();
             e.printStackTrace();
             Toast.makeText(context, "Error downloading file", Toast.LENGTH_SHORT).show();
         }
@@ -833,11 +1101,12 @@ public class StoreActivity extends Activity {
                 public void onQueryInventoryFinished(IabResult result, Inventory inv) {
                     if (result.isFailure()) {
                         // handle error
+                        Toast.makeText(context, R.string.store_error_msg, Toast.LENGTH_SHORT).show();
                         return;
                     }
 
                     packPriceList.put(SKU_TWO_DOLLAR_PACK, inv.getSkuDetails(SKU_TWO_DOLLAR_PACK).getPrice());
-                    samplePackListAdapter.notifyDataSetChanged();
+                    if (samplePackListAdapter != null) samplePackListAdapter.notifyDataSetChanged();
 
                     checkForUnconsumedPurchases();
 
@@ -847,22 +1116,21 @@ public class StoreActivity extends Activity {
             e.printStackTrace();
         }
     }
-    private void startPurchaseFlow(String sku, final View statusBar, final String packName){
+    private void startPurchaseFlow(String sku, final String packName){
         FirebaseUser user = mAuth.getCurrentUser();
         SharedPreferences prefs = getSharedPreferences(ACCOUNT_PREFS, MODE_PRIVATE);
         if (user == null || (user.isAnonymous()) && prefs.getBoolean(SHOW_CREATE_ACCOUNT_PROMPT, true)) {
             // Prompt to create account
             savedSku = sku;
-            savedStatusBar = statusBar;
             savedPackName = packName;
             restartPurchaseFlow = true;
             showCreateAccountPrompt();
 
         } else {
-            makePurchase(user.getUid(), sku, packName, statusBar);
+            makePurchase(user.getUid(), sku, packName);
         }
     }
-    private void makePurchase(String uid, String sku, final String packName, final View statusBar){
+    private void makePurchase(String uid, String sku, final String packName){
         restartPurchaseFlow = false;
         try {
             mBillingHelper.launchPurchaseFlow(this, sku, RC_PURCHASE,
@@ -875,11 +1143,6 @@ public class StoreActivity extends Activity {
                             }
 
                             Log.i(LOG_TAG, "Purchase complete");
-                            statusBar.setVisibility(View.VISIBLE);
-                            TextView statusView = (TextView)statusBar.findViewById(R.id.status_textview);
-                            statusView.setText(R.string.purchasing);
-                            ProgressBar progressBar = (ProgressBar)statusBar.findViewById(R.id.progressBar);
-                            progressBar.setIndeterminate(true);
                             // Save record of purchase
                             updatePurchaseRecord(packName);
 
@@ -891,7 +1154,7 @@ public class StoreActivity extends Activity {
                                         if (! result.isSuccess()) return;
                                         // Download pack
                                         Log.i(LOG_TAG, "Purchase consumed");
-                                        downloadPack(statusBar, packName);
+                                        downloadPack(packName);
                                     }
                                 });
                             } catch (IabHelper.IabAsyncInProgressException e){

@@ -55,4 +55,30 @@ public class Animations {
 
         return set;
     }
+
+    public static AnimatorSet fadeIn(View v, int duration, int delay){
+        v.setVisibility(View.VISIBLE);
+        v.setAlpha(0f);
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(v, "alpha",0f, 1f);
+
+        AnimatorSet set = new AnimatorSet();
+        set.setInterpolator(new DecelerateInterpolator());
+        set.play(fadeOut);
+        set.setStartDelay(delay);
+        set.setDuration(duration);
+
+        return set;
+    }
+
+    public static AnimatorSet fadeOut(View v, int duration, int delay){
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(v, "alpha", 1f, 0f);
+
+        AnimatorSet set = new AnimatorSet();
+        set.setInterpolator(new DecelerateInterpolator());
+        set.play(fadeOut);
+        set.setStartDelay(delay);
+        set.setDuration(duration);
+
+        return set;
+    }
 }

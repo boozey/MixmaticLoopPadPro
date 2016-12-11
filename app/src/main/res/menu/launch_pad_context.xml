@@ -3,27 +3,4 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/action_edit_sample"
         android:title="@string/action_edit_sample"/>
-    <item android:id="@+id/action_loop_mode"
-        android:title="@string/action_loop_mode"
-        android:checkable="true"
-        android:showAsAction="never"/>
-    <item android:id="@+id/action_launch_mode"
-        android:title="@string/action_launch_mode">
-        <menu>
-            <group android:checkableBehavior="single">
-                <item android:id="@+id/action_launch_mode_trigger"
-                   android:title="@string/action_launch_mode_trigger" />
-                <item android:id="@+id/action_launch_mode_gate"
-                   android:title="@string/action_launch_mode_gate" />
-            </group>
-        </menu>
-    </item>
-    <item android:id="@+id/action_set_tempo"
-        android:title="Match Tempo" />
-    <item android:id="@+id/action_set_volume"
-        android:title="@string/action_set_volume" />
-    <item android:id="@+id/action_pick_color"
-        android:title="@string/action_pick_color" />
-    <item android:id="@+id/action_remove_sample"
-        android:title="@string/action_remove_sample" />
 </menu>
