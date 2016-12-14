@@ -19,49 +19,6 @@
     android:orientation="vertical"
     android:id="@+id/mainLayout">
 
-
-    <RelativeLayout
-        android:id="@+id/counter_bar"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:visibility="gone">
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceMedium"
-            android:text="120 BPM    00 : 00"
-            android:id="@+id/textViewCounter"
-            android:layout_gravity="center_vertical"
-            android:layout_centerInParent="true"/>
-        <ImageButton
-            android:id="@+id/button_rewind"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/button_rewind"
-            android:onClick="RewindButtonClick"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"
-            />
-        <ImageButton
-            android:id="@+id/button_play"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/button_play"
-            android:onClick="PlayButtonClick"
-            android:layout_toEndOf="@id/button_rewind"
-            android:layout_toRightOf="@+id/button_rewind"
-            android:layout_centerVertical="true"/>
-        <ImageButton
-            android:id="@+id/button_fast_forward"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/button_fforward"
-            android:onClick="FastForwardButtonClick"
-            android:layout_toEndOf="@id/button_play"
-            android:layout_toRightOf="@+id/button_play"
-            android:layout_centerVertical="true" />
-        </RelativeLayout>
-
     <LinearLayout
         android:layout_width="fill_parent"
         android:layout_height="0dp"
@@ -269,6 +226,196 @@
 
 </LinearLayout>
 
+    <LinearLayout android:id="@+id/edit_mode_overlay"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:layout_marginRight="33dp"
+        android:layout_below="@id/my_toolbar"
+        android:orientation="vertical"
+        android:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/touchPad1_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad2_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad3_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad4_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/touchPad5_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad6_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad7_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad8_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/touchPad9_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad10_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad11_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad12_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/touchPad13_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad14_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad15_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad16_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/touchPad17_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad18_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad19_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad20_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <TextView
+                android:id="@+id/touchPad21_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+            <TextView
+                android:id="@+id/touchPad22_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad23_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light" />
+            <TextView
+                android:id="@+id/touchPad24_textview"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:textColor="@color/text_primary_light"/>
+        </LinearLayout>
+
+
+    </LinearLayout>
     <!-- Sample Library -->
     <LinearLayout
         android:id="@+id/sample_library"
@@ -306,8 +453,8 @@
                 android:onClick="DeleteSampleClick"/>
         </RelativeLayout>
         <!-- Main tray-->
-        <LinearLayout
-            android:layout_width="wrap_content"
+        <RelativeLayout
+            android:layout_width="250dp"
             android:layout_height="wrap_content"
             android:orientation="vertical">
             <!-- Button bar-->
@@ -338,6 +485,7 @@
             <TextView android:id="@+id/sample_pack_empty_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_below="@id/sample_lib_button_bar"
                 android:layout_gravity="bottom"
                 android:padding="4dp"
                 android:drawableStart="@drawable/ic_shopping_bag_40dp"
@@ -353,59 +501,67 @@
                 android:visibility="gone"
                 android:onClick="OpenStore"
                 android:clickable="true"/>
-            <ListView
-                android:id="@+id/sample_listview"
-                android:layout_width="250dp"
-                android:layout_height="0dp"
+            <ListView android:id="@+id/sample_listview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/sample_lib_button_bar"
                 android:layout_weight="1"
                 android:choiceMode="singleChoice"
                 android:visibility="visible"/>
             <ListView android:id="@+id/sample_pack_listview"
-                android:layout_width="250dp"
-                android:layout_height="0dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/sample_pack_empty_view"
                 android:layout_weight="1"
                 android:visibility="gone"/>
             <LinearLayout android:id="@+id/selected_pack_view"
-                android:orientation="horizontal"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:layout_below="@id/sample_pack_empty_view"
                 android:padding="8dp"
                 android:visibility="gone">
-                <ImageView android:id="@+id/image_view"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:layout_marginEnd="8dp"
-                    android:layout_marginRight="8dp"
-                    android:layout_gravity="center_vertical"/>
                 <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:layout_gravity="center_vertical">
-                    <TextView android:id="@+id/title_view"
-                        android:layout_width="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <ImageView android:id="@+id/image_view"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_marginRight="8dp"
+                        android:layout_gravity="center_vertical"/>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
                         android:layout_height="wrap_content"
-                        android:textSize="16sp"
-                        android:textColor="@color/text_primary_light"
-                        android:text="Title Text"/>
-                    <TextView android:id="@+id/genre_view"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/text_primary_light"
-                        android:text="Genre"/>
+                        android:orientation="vertical"
+                        android:layout_gravity="center_vertical">
+                        <TextView android:id="@+id/title_view"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="16sp"
+                            android:textColor="@color/text_primary_light"
+                            android:text="Title Text"/>
+                        <TextView android:id="@+id/genre_view"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/text_primary_light"
+                            android:text="Genre"/>
+                    </LinearLayout>
                 </LinearLayout>
+                <ExpandableListView android:id="@+id/sample_pack_files_listview"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:groupIndicator="@drawable/expandable_list_indicator_white"
+                    android:visibility="gone"/>
             </LinearLayout>
-            <ExpandableListView android:id="@+id/sample_pack_files_listview"
-                android:layout_width="250dp"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:visibility="gone"
-                android:groupIndicator="@drawable/expandable_list_indicator_white"/>
-        </LinearLayout>
+
+        </RelativeLayout>
     </LinearLayout>
 
-    <!-- Touchpad Toolbar-->
+    <!-- Edit mode tools-->
     <LinearLayout android:id="@+id/pad_toolbar"
         android:layout_width="44dp"
         android:layout_height="wrap_content"
@@ -426,7 +582,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_margin="4dp"
-            android:background="@drawable/ic_action_av_loop"
+            android:background="@drawable/ic_av_loop"
             android:onClick="toolBarClick"/>
         <ImageButton android:id="@+id/action_launch_mode"
             android:layout_width="wrap_content"
@@ -453,16 +609,22 @@
             android:background="@drawable/ic_action_delete"
             android:onClick="toolBarClick"/>
     </LinearLayout>
-    <Button android:id="@+id/done_button"
+    <TextView android:id="@+id/done_button"
         android:layout_width="wrap_content"
         android:layout_height="40dp"
         android:layout_marginBottom="8dp"
+        android:drawableLeft="@drawable/ic_action_done"
+        android:drawableStart="@drawable/ic_action_done"
+        android:drawablePadding="8dp"
+        android:gravity="center_vertical"
         android:paddingLeft="@dimen/activity_horizontal_margin"
         android:paddingRight="@dimen/activity_horizontal_margin"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
-        android:translationY="48dp"
         android:background="@drawable/rounded_corner_accent"
         android:text="@string/button_done"
-        android:onClick="DoneButtonClick"/>
+        android:textColor="@color/text_primary_light"
+        android:clickable="true"
+        android:onClick="DoneButtonClick"
+        android:translationY="48dp"/>
 </RelativeLayout>

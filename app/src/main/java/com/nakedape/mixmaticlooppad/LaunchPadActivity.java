@@ -176,6 +176,11 @@ public class LaunchPadActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.loading_screen);
         context = this;
+
+        // Find the retained fragment on activity restarts
+        FragmentManager fm = getFragmentManager();
+        savedData = (LaunchPadData) fm.findFragmentByTag("data");
+
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -277,11 +282,13 @@ public class LaunchPadActivity extends AppCompatActivity {
                 startActivity(intent);
                 return true;
             case R.id.action_edit_mode:
-                if (activePads.size() > 0) {
+                if (!isEditMode) {
                     isRecording = false;
                     gotoEditMode();
                     View v = findViewById(activePads.get(0));
                     v.callOnClick();
+                } else {
+                    gotoPlayMode();
                 }
                 return true;
             case R.id.action_play:
@@ -482,14 +489,8 @@ public class LaunchPadActivity extends AppCompatActivity {
             timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
             updateCounterMessage();
             actionBar.setDisplayShowCustomEnabled(true);
-        } else {
-            findViewById(R.id.counter_bar).setVisibility(View.VISIBLE);
-            counterTextView = (TextView) findViewById(R.id.textViewCounter);
-            bpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 120);
-            timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
-            Log.d(LOG_TAG, "Action bar null");
-            updateCounterMessage();
         }
+
 
         if (savedData != null){
             samples = savedData.getSamples();
@@ -506,7 +507,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 disconnectTouchListeners();
             launchEvents = savedData.getLaunchEvents();
             playEventIndex = savedData.getPlayEventIndex();
-            if (isRecording) {
+            /*if (isRecording) {
                 View v = findViewById(R.id.button_play);
                 v.setBackgroundResource(R.drawable.button_pause);
                 new Thread(new CounterThread()).start();
@@ -515,7 +516,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 View v = findViewById(R.id.button_play);
                 v.setBackgroundResource(R.drawable.button_pause);
                 new Thread(new playBackRecording()).start();
-            }
+            }*/
             sampleListAdapter.sampleFiles = savedData.sampleFiles;
             sampleListAdapter.sampleLengths = savedData.sampleLengths;
             // Setup touch pads from retained fragment
@@ -801,7 +802,8 @@ public class LaunchPadActivity extends AppCompatActivity {
         editor.remove(padNumber + LOOPMODE);
         editor.remove(padNumber + COLOR);
         editor.apply();
-        Toast.makeText(context, "Sample removed", Toast.LENGTH_SHORT).show();
+        updatePadOverlay();
+        //Toast.makeText(context, "Sample removed", Toast.LENGTH_SHORT).show();
         launchPadActionMode = null;
     }
     private void notifySampleLoadError(Sample s){
@@ -877,12 +879,18 @@ public class LaunchPadActivity extends AppCompatActivity {
     }
 
     // Edit mode methods
+    private int[] padTextViewIds = {R.id.touchPad1_textview, R.id.touchPad2_textview, R.id.touchPad3_textview, R.id.touchPad4_textview,
+            R.id.touchPad5_textview, R.id.touchPad6_textview, R.id.touchPad7_textview, R.id.touchPad8_textview, R.id.touchPad9_textview,
+            R.id.touchPad10_textview, R.id.touchPad11_textview, R.id.touchPad12_textview, R.id.touchPad13_textview, R.id.touchPad14_textview,
+            R.id.touchPad15_textview, R.id.touchPad16_textview, R.id.touchPad17_textview, R.id.touchPad18_textview, R.id.touchPad19_textview,
+            R.id.touchPad20_textview, R.id.touchPad21_textview, R.id.touchPad22_textview, R.id.touchPad23_textview, R.id.touchPad24_textview};
     private int[] padColorDrawables = {R.drawable.launch_pad_blue, R.drawable.launch_pad_red, R.drawable.launch_pad_green, R.drawable.launch_pad_orange};
     private void gotoEditMode(){
         isEditMode = true;
         showToolBar();
-        for (int id : touchPadIds){
-            View pad = findViewById(id);
+        updatePadOverlay();
+        for (int i = 0; i < touchPadIds.length; i++){
+            View pad = findViewById(touchPadIds[i]);
             pad.setOnLongClickListener(new View.OnLongClickListener() {
                 @Override
                 public boolean onLongClick(View v) {
@@ -890,6 +898,19 @@ public class LaunchPadActivity extends AppCompatActivity {
                     return true;
                 }
             });
+        }
+    }
+    private void updatePadOverlay(){
+        TextView textView;
+        String path;
+        for (int i = 0; i < touchPadIds.length; i++){
+            textView = (TextView)rootLayout.findViewById(padTextViewIds[i]);
+            if (activePads.contains(touchPadIds[i])){
+                path = samples.get(touchPadIds[i]).path;
+                textView.setText(path.substring(path.lastIndexOf("/") + 1).replace(".wav", ""));
+            } else {
+                textView.setText("Empty");
+            }
         }
     }
     public void DoneButtonClick(View v){
@@ -915,6 +936,8 @@ public class LaunchPadActivity extends AppCompatActivity {
         isEditMode = false;
     }
     private void showToolBar(){
+        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
+        overlay.setVisibility(View.VISIBLE);
         View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
         View doneButton = rootLayout.findViewById(R.id.done_button);
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
@@ -924,11 +947,14 @@ public class LaunchPadActivity extends AppCompatActivity {
         slideLeft.setTarget(toolBar);
         ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", doneButton.getHeight() + params.bottomMargin, 0);
         slideUp.setTarget(doneButton);
+        AnimatorSet fadeIn = Animations.fadeIn(overlay, 200, 0);
         set.setInterpolator(new AccelerateDecelerateInterpolator());
-        set.playTogether(slideLeft, slideUp);
+        set.playTogether(slideLeft, slideUp, fadeIn);
         set.start();
     }
     private void hideToolBar(){
+        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
+        overlay.setVisibility(View.GONE);
         View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
         View doneButton = rootLayout.findViewById(R.id.done_button);
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
@@ -938,8 +964,9 @@ public class LaunchPadActivity extends AppCompatActivity {
         slideLeft.setTarget(toolBar);
         ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", 0, doneButton.getHeight() + params.bottomMargin);
         slideUp.setTarget(doneButton);
+        AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
         set.setInterpolator(new AccelerateDecelerateInterpolator());
-        set.playTogether(slideLeft, slideUp);
+        set.playTogether(slideLeft, slideUp, fadeOut);
         set.start();
     }
     public void toolBarClick(View v){
@@ -971,7 +998,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 }
                 return;
             case R.id.action_launch_mode:
-                if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE) == Sample.LAUNCHMODE_TRIGGER){
+                if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER) == Sample.LAUNCHMODE_TRIGGER){
                     rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_keyboard);
                     Sample s = samples.get(selectedSampleID);
                     s.setLaunchMode(Sample.LAUNCHMODE_GATE);
@@ -1149,6 +1176,7 @@ public class LaunchPadActivity extends AppCompatActivity {
             editor.remove(pad1Number + COLOR);
         }
         editor.apply();
+        updatePadOverlay();
         pad2.callOnClick();
     }
     private void loadPadFromDrop(String path, int padId, int color){
@@ -1165,10 +1193,18 @@ public class LaunchPadActivity extends AppCompatActivity {
             editor.putString(pad.getTag().toString() + SAMPLE_PATH, path);
             editor.commit();
             loadSample(sample, pad);
+            pad.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    touchPadEditLongClick(v);
+                    return true;
+                }
+            });
             pad.callOnClick();
         } else {
             notifySampleLoadError(sample);
         }
+        updatePadOverlay();
     }
 
     // Sample Library Methods
@@ -1470,6 +1506,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
+        Animations.fadeIn(rootLayout.findViewById(R.id.sample_listview), 200, 0).start();
     }
     public void SamplePacksClick(View v){
         TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
@@ -1483,11 +1520,13 @@ public class LaunchPadActivity extends AppCompatActivity {
         rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
         rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.VISIBLE);
+        Animations.fadeIn(findViewById(R.id.sample_pack_listview), 200, 0).start();
     }
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
         private ArrayList<String> titles;
         private ArrayList<String> genres;
+        private ArrayList<Bitmap> images;
         private Context mContext;
         private int resource_id;
         private LayoutInflater mInflater;
@@ -1499,6 +1538,7 @@ public class LaunchPadActivity extends AppCompatActivity {
             names = new ArrayList<>();
             titles = new ArrayList<>();
             genres = new ArrayList<>();
+            images = new ArrayList<>();
         }
 
         private void refresh(){
@@ -1521,6 +1561,11 @@ public class LaunchPadActivity extends AppCompatActivity {
                         } catch (IOException e) {
                             //You'll need to add proper error handling here
                             e.printStackTrace();
+                        }
+                        File image = new File(new File(samplePackDirectory, folder.getName()), folder.getName() + ".png");
+                        if (image.exists()) {
+                            BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+                            images.add(BitmapFactory.decodeFile(image.getAbsolutePath(), bmOptions));
                         }
                     }
                 }
@@ -1556,13 +1601,8 @@ public class LaunchPadActivity extends AppCompatActivity {
             TextView genreView = (TextView)convertView.findViewById(R.id.genre_view);
             genreView.setText(genres.get(position));
 
-            File image = new File(new File(samplePackDirectory, names.get(position)), names.get(position) + ".png");
-            if (image.exists()) {
-                ImageView imageView = (ImageView)convertView.findViewById(R.id.image_view);
-                BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-                Bitmap bitmap = BitmapFactory.decodeFile(image.getAbsolutePath(), bmOptions);
-                imageView.setImageBitmap(bitmap);
-            }
+            ImageView imageView = (ImageView)convertView.findViewById(R.id.image_view);
+            imageView.setImageBitmap(images.get(position));
 
             convertView.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -1570,19 +1610,14 @@ public class LaunchPadActivity extends AppCompatActivity {
                     // Prepare selected pack view
                     final View selectedView = rootLayout.findViewById(R.id.selected_pack_view);
                     selectedView.setVisibility(View.VISIBLE);
-                    TextView titleView = (TextView)selectedView.findViewById(R.id.title_view);
+                    TextView titleView = (TextView) selectedView.findViewById(R.id.title_view);
                     titleView.setText(titles.get(position));
 
-                    TextView genreView = (TextView)selectedView.findViewById(R.id.genre_view);
+                    TextView genreView = (TextView) selectedView.findViewById(R.id.genre_view);
                     genreView.setText(genres.get(position));
 
-                    File image = new File(new File(samplePackDirectory, names.get(position)), names.get(position) + ".png");
-                    if (image.exists()) {
-                        ImageView imageView = (ImageView)selectedView.findViewById(R.id.image_view);
-                        BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-                        Bitmap bitmap = BitmapFactory.decodeFile(image.getAbsolutePath(), bmOptions);
-                        imageView.setImageBitmap(bitmap);
-                    }
+                    ImageView imageView = (ImageView) selectedView.findViewById(R.id.image_view);
+                    imageView.setImageBitmap(images.get(position));
 
                     selectedView.setOnClickListener(new View.OnClickListener() {
                         @Override
@@ -1590,14 +1625,24 @@ public class LaunchPadActivity extends AppCompatActivity {
                             SamplePacksClick(v);
                         }
                     });
-                    showSamplePackFiles(names.get(position));
+
+                    // Animate transition
+
+                    int dy = v.getTop();
+                    ObjectAnimator slideUp = ObjectAnimator.ofFloat(selectedView, "TranslationY", dy, 0);
+                    slideUp.setInterpolator(new AccelerateDecelerateInterpolator());
+                    AnimatorSet set = new AnimatorSet();
+                    set.play(slideUp);
+                    set.setDuration(dy);
+                    showSamplePackFiles(names.get(position), set);
+
                 }
             });
 
             return  convertView;
         }
     }
-    private void showSamplePackFiles(String name){
+    private void showSamplePackFiles(String name, AnimatorSet anim){
         ExpandableListView packListView = (ExpandableListView)rootLayout.findViewById(R.id.sample_pack_files_listview);
         SamplePackFilesListAdapter filesListAdapter = new SamplePackFilesListAdapter(context, R.layout.sample_pack_folder_list_item, R.layout.sample_pack_file_list_item);
         packListView.setAdapter(filesListAdapter);
@@ -1605,6 +1650,10 @@ public class LaunchPadActivity extends AppCompatActivity {
 
         rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
         packListView.setVisibility(View.VISIBLE);
+        AnimatorSet fadeIn = Animations.fadeIn(packListView, 200, (int)anim.getDuration());
+        AnimatorSet set = new AnimatorSet();
+        set.playTogether(anim, fadeIn);
+        set.start();
     }
     private class SamplePackFilesListAdapter extends BaseExpandableListAdapter {
         private LayoutInflater mInflater;
@@ -2028,8 +2077,10 @@ public class LaunchPadActivity extends AppCompatActivity {
                 s.stop();
             }
         }
+        /*
         View v = findViewById(R.id.button_play);
         v.setBackgroundResource(R.drawable.button_play);
+        */
         reconnectTouchListeners();
         isRecording = false;
     }
