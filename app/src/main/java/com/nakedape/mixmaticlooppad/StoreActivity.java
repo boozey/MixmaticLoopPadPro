@@ -2,7 +2,6 @@ package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -15,7 +14,9 @@ import android.support.annotation.NonNull;
 import android.os.Bundle;
 import android.support.design.widget.BottomNavigationView;
 import android.support.design.widget.Snackbar;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.content.res.AppCompatResources;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -41,12 +42,12 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.storage.FileDownloadTask;
 import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.OnProgressListener;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
@@ -69,7 +70,7 @@ import IABUtils.Purchase;
 public class StoreActivity extends AppCompatActivity {
 
     public final static String ACCOUNT_PREFS = "ACCOUNT_PREFS";
-    public final static String AUTO_SIGNIN = "AUTO_SIGNIN";
+    public final static String AUTO_SIGN_IN = "AUTO_SIGN_IN";
     private final static String SHOW_CREATE_ACCOUNT_PROMPT = "SHOW_CREATE_ACCOUNT_PROMPT";
     private final String LOG_TAG = "StoreActivity";
 
@@ -78,6 +79,8 @@ public class StoreActivity extends AppCompatActivity {
     private StorageReference packFolderRef;
     private FirebaseAuth mAuth;
     private FirebaseAuth.AuthStateListener authStateListener;
+    private FirebaseAnalytics firebaseAnalytics;
+    private static final String SAMPLE_PACK_PURCHASE = "SAMPLE_PACK_PURCHASE";
 
     private Context context;
     private RelativeLayout rootLayout;
@@ -91,6 +94,9 @@ public class StoreActivity extends AppCompatActivity {
         context = this;
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
 
+        // Initialize Firebase Analytics
+        firebaseAnalytics = FirebaseAnalytics.getInstance(context);
+
         // Initialize navigation bar
         BottomNavigationView.OnNavigationItemSelectedListener navListener = new BottomNavigationView.OnNavigationItemSelectedListener() {
             @Override
@@ -103,9 +109,20 @@ public class StoreActivity extends AppCompatActivity {
 
         // Setup toolbar
         Toolbar toolbar = (Toolbar) findViewById(R.id.my_toolbar);
+        toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
         setSupportActionBar(toolbar);
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        getSupportActionBar().setDisplayShowHomeEnabled(true);
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.setDisplayHomeAsUpEnabled(true);
+            actionBar.setDisplayShowTitleEnabled(false);
+            actionBar.setCustomView(R.layout.store_action_bar_custom_view);
+            actionBar.setDisplayShowCustomEnabled(true);
+
+            Toolbar bar = (Toolbar)actionBar.getCustomView().getParent();
+            bar.setContentInsetsAbsolute(0, 0);
+            bar.getContentInsetEnd();
+            bar.setPadding(0, 0, 0, 0);
+        }
 
         // Initialize price list with default values
         packPriceList = new HashMap<>();
@@ -143,8 +160,11 @@ public class StoreActivity extends AppCompatActivity {
                     indexRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
                         @Override
                         public void onSuccess(byte[] bytes) {
-                            Log.d(LOG_TAG, "Downloaded index, size = " + bytes.length);
                             LoadStoreData(bytes);
+                            // Record Firebase event
+                            Bundle bundle = new Bundle();
+                            bundle.putString(FirebaseAnalytics.Param.ITEM_CATEGORY, "Sample Packs");
+                            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.VIEW_ITEM_LIST, bundle);
                         }
                     }).addOnFailureListener(new OnFailureListener() {
                         @Override
@@ -177,7 +197,7 @@ public class StoreActivity extends AppCompatActivity {
         // If user is not signed in and has not signed in before, sign-in anon
         if (mAuth.getCurrentUser() == null) {
             SharedPreferences prefs = getSharedPreferences(ACCOUNT_PREFS, MODE_PRIVATE);
-            if (prefs.getBoolean(AUTO_SIGNIN, false)){
+            if (prefs.getBoolean(AUTO_SIGN_IN, false)){
                 startSignInFlow();
             } else {
                 mAuth.signInAnonymously()
@@ -191,11 +211,18 @@ public class StoreActivity extends AppCompatActivity {
                                 // signed in user can be handled in the listener.
                                 if (!task.isSuccessful()) {
                                     Log.w(LOG_TAG, "signInAnonymously", task.getException());
-                                    Toast.makeText(context, "Authentication failed.",
+                                    Toast.makeText(context, R.string.auth_error,
                                             Toast.LENGTH_SHORT).show();
                                 }
                             }
                         });
+            }
+        } else {
+            // user is signed in!
+            Toast.makeText(context, R.string.sign_in_success, Toast.LENGTH_SHORT).show();
+            if (actionBar != null){
+                TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
+                button.setText(R.string.sign_out);
             }
         }
 
@@ -238,15 +265,27 @@ public class StoreActivity extends AppCompatActivity {
         if (requestCode == RC_SIGN_IN) {
             if (resultCode == RESULT_OK) {
                 // user is signed in!
-                Toast.makeText(context, "Sign-in succeeded", Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, R.string.sign_in_success, Toast.LENGTH_SHORT).show();
                 SharedPreferences.Editor editor = getSharedPreferences(ACCOUNT_PREFS, MODE_PRIVATE).edit();
-                editor.putBoolean(AUTO_SIGNIN, true);
+                editor.putBoolean(AUTO_SIGN_IN, true);
                 editor.apply();
 
-                if (restartPurchaseFlow) {
-                    FirebaseUser user = mAuth.getCurrentUser();
-                    if (user != null)
+                ActionBar actionBar = getSupportActionBar();
+                if (actionBar != null){
+                    TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
+                    button.setText(R.string.sign_out);
+                }
+
+                FirebaseUser user = mAuth.getCurrentUser();
+                if (user != null) {
+                    // Record Firebase sign-in event
+                    Bundle bundle = new Bundle();
+                    bundle.putString(FirebaseAnalytics.Param.SIGN_UP_METHOD, user.getProviderId());
+                    firebaseAnalytics.logEvent(FirebaseAnalytics.Event.LOGIN, bundle);
+
+                    if (restartPurchaseFlow) {
                         makePurchase(user.getUid(), savedSku, savedPackName);
+                    }
                 }
                 return;
             }
@@ -258,6 +297,7 @@ public class StoreActivity extends AppCompatActivity {
 
             // No network
             if (resultCode == ResultCodes.RESULT_NO_NETWORK) {
+                Toast.makeText(context, R.string.no_network, Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -269,7 +309,6 @@ public class StoreActivity extends AppCompatActivity {
                 mBillingHelper.handleActivityResult(requestCode, resultCode, data);
         }
     }
-
 
     private void setupFolders(){
         // Prepare stoarage directories
@@ -292,6 +331,7 @@ public class StoreActivity extends AppCompatActivity {
     private Snackbar snackbar;
     private ArrayList<String> availPacks;
     private ArrayList<String> ownedPacks;
+    private HashMap<String, String> parentPacks;
     private PurchasesListAdapter purchasesListAdapter;
     private int storeWindowSize = 5;
     private int storeIndex = 0;
@@ -352,6 +392,15 @@ public class StoreActivity extends AppCompatActivity {
                     //You'll need to add proper error handling here
                     e.printStackTrace();
                 }
+            }
+        }
+
+        private String getPackDisplayTitle(String packName){
+            int index = names.indexOf(packName);
+            if (index >= 0){
+                return titles.get(index);
+            } else {
+                return getString(R.string.untitled);
             }
         }
 
@@ -456,7 +505,8 @@ public class StoreActivity extends AppCompatActivity {
     private class PurchasesListAdapter extends BaseAdapter {
         private ArrayList<String> names;
         private ArrayList<String> titles;
-        private ArrayList<String> skus;
+        private ArrayList<String> orderIds;
+        private ArrayList<Long> timeStamps;
         private Context mContext;
         private int resource_id;
         private LayoutInflater mInflater;
@@ -467,48 +517,21 @@ public class StoreActivity extends AppCompatActivity {
             mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             names = new ArrayList<>();
             titles = new ArrayList<>();
-            skus = new ArrayList<>();
+            orderIds = new ArrayList<>();
+            timeStamps = new ArrayList<>();
         }
 
-        private void addPack(String name){
-            names.add(name);
-            titles.add(null);
-            skus.add(null);
+        private void addPack(String packName, String displayName, String orderId, long timeStamp){
+            names.add(packName);
+            titles.add(displayName);
+            orderIds.add(orderId);
+            timeStamps.add(timeStamp);
             notifyDataSetChanged();
             Log.d(LOG_TAG, "Owned pack added");
         }
 
-        private void addPacks(ArrayList<String> packs){
-            for (String p : packs){
-                addPack(p);
-                File detailsFile = new File(cacheFolder, p + ".txt");
-                if (detailsFile.exists())
-                    addPackDetails(p);
-                else
-                    downloadInfo(p);
-            }
-        }
-
         private void addItem(String name){
 
-        }
-
-        private void addPackDetails(String name){
-            File desc = new File(cacheFolder, name + ".txt");
-            int index = names.indexOf(name);
-            if (desc.exists() && index >= 0) {
-                try {
-                    BufferedReader br = new BufferedReader(new FileReader(desc));
-                    titles.set(index, br.readLine());
-                    skus.set(index, br.readLine());
-                    br.close();
-                    notifyDataSetChanged();
-                }
-                catch (IOException e) {
-                    //You'll need to add proper error handling here
-                    e.printStackTrace();
-                }
-            }
         }
 
         @Override
@@ -536,6 +559,8 @@ public class StoreActivity extends AppCompatActivity {
 
             ProgressBar loadingBar = (ProgressBar)convertView.findViewById(R.id.loading_circle_spinner);
             TextView titleView = (TextView)convertView.findViewById(R.id.title_view);
+            TextView idView = (TextView)convertView.findViewById(R.id.order_id_view);
+            TextView timeView = (TextView)convertView.findViewById(R.id.time_view);
             Button buyButton = (Button)convertView.findViewById(R.id.download_button);
 
             if (titles.get(position) != null) {
@@ -543,6 +568,12 @@ public class StoreActivity extends AppCompatActivity {
 
                 titleView.setVisibility(View.VISIBLE);
                 titleView.setText(titles.get(position));
+
+                idView.setVisibility(View.VISIBLE);
+                idView.setText(orderIds.get(position));
+
+                timeView.setVisibility(View.VISIBLE);
+                timeView.setText(Utils.getTimeAgo(getResources(), timeStamps.get(position)));
 
                 buyButton.setVisibility(View.VISIBLE);
                 buyButton.setOnClickListener(new View.OnClickListener() {
@@ -564,6 +595,8 @@ public class StoreActivity extends AppCompatActivity {
                 loadingBar.setVisibility(View.VISIBLE);
                 titleView.setVisibility(View.GONE);
                 buyButton.setVisibility(View.GONE);
+                idView.setVisibility(View.GONE);
+                timeView.setVisibility(View.GONE);
             }
             return  convertView;
         }
@@ -575,11 +608,15 @@ public class StoreActivity extends AppCompatActivity {
         String indexText;
         try {
             indexText = new String(indexBytes, "UTF-8");
-            String[] strings = indexText.split("\n");
-            availPacks = new ArrayList<>(strings.length);
-            for (String s : strings){
-                availPacks.add(s.trim());
-                Log.d(LOG_TAG, s);
+            String[] entries = indexText.split("\n");
+            availPacks = new ArrayList<>(entries.length);
+            parentPacks = new HashMap<>(entries.length);
+            String[] entry;
+            for (String x : entries){
+                entry = x.split(";");
+                availPacks.add(entry[0].trim());
+                parentPacks.put(entry[0].trim(), entry[1].trim());
+
             }
             setupFolders();
             samplePackListAdapter = new SamplePackListAdapter(this, R.layout.store_sample_pack_item);
@@ -614,7 +651,8 @@ public class StoreActivity extends AppCompatActivity {
                 if (filename.contains(".txt")){
                     if (availPacks.contains(filename.replace(".txt", ""))) {
                         Log.d(LOG_TAG, "Cached pack: " + filename);
-                        return true;
+                        //return true;
+                        return false;
                     } else
                         return false;
                 } else
@@ -626,6 +664,7 @@ public class StoreActivity extends AppCompatActivity {
             samplePackListAdapter.addPack(packName);
             if (cachedPacks.contains(packName + ".txt")){
                 samplePackListAdapter.addPackDetails(packName);
+                Log.d(LOG_TAG, "Added pack details for " + packName);
             }
             else {
                 downloadInfo(packName);
@@ -643,8 +682,6 @@ public class StoreActivity extends AppCompatActivity {
                 @Override
                 public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
                     samplePackListAdapter.addPackDetails(packName);
-                    if (purchasesListAdapter != null)
-                        purchasesListAdapter.addPackDetails(packName);
                     File image = new File(cacheFolder, packName + ".png");
                     try {
                         image.createNewFile();
@@ -668,13 +705,23 @@ public class StoreActivity extends AppCompatActivity {
     }
     private void LoadPurchaseRec(byte[] purchListBytes){
         // Processs remote purchase record
+        String[] recordArray = null;
         try{
             String purchasesTextDL;
             purchasesTextDL = new String(purchListBytes, "UTF-8");
-            String[] packNameArray = purchasesTextDL.split("\n");
-            ownedPacks = new ArrayList<>(packNameArray.length);
-            for (String s : packNameArray)
-                ownedPacks.add(s.trim());
+            recordArray = purchasesTextDL.split("\n");
+            ownedPacks = new ArrayList<>(recordArray.length);
+            purchasesListAdapter = new PurchasesListAdapter(context, R.layout.store_purchase_item);
+            ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
+            purchasesList.setAdapter(purchasesListAdapter);
+            for (String record : recordArray) {
+                String[] details = record.trim().split(";");
+                Log.d(LOG_TAG, record);
+                if (details.length == 4) {
+                    ownedPacks.add(details[0].trim());
+                    purchasesListAdapter.addPack(details[0], details[1], details[2], Long.valueOf(details[3]));
+                }
+            }
 
             Log.d(LOG_TAG, "ownedPacks = " + ownedPacks.size());
         } catch (UnsupportedEncodingException e) {
@@ -683,14 +730,15 @@ public class StoreActivity extends AppCompatActivity {
         }
 
         // Save remote purchase record locally
-        if (ownedPacks != null) {
+        if (recordArray != null) {
             File recordFile = new File(getFilesDir(), "purchases.txt");
             try {
                 if (recordFile.exists()) recordFile.delete();
                 else recordFile.createNewFile();
                 FileWriter writer = new FileWriter(recordFile);
-                for (String packName : ownedPacks) {
-                    writer.append(packName + "\n");
+                for (String record : recordArray) {
+                    writer.append(record);
+                    writer.append("\n");
                 }
                 writer.flush();
                 writer.close();
@@ -703,13 +751,20 @@ public class StoreActivity extends AppCompatActivity {
     private void LoadLocalPurchaseRec(){
         Log.d(LOG_TAG, "Loading Local Purchase Record");
         ownedPacks = new ArrayList<>();
+        purchasesListAdapter = new PurchasesListAdapter(context, R.layout.store_purchase_item);
+        ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
+        purchasesList.setAdapter(purchasesListAdapter);
         File recordFile = new File(getFilesDir(), "purchases.txt");
         if (recordFile.exists()){
             try {
                 BufferedReader reader = new BufferedReader(new FileReader(recordFile));
                 String line;
                 while ((line = reader.readLine()) != null){
-                    ownedPacks.add(line.trim());
+                    String[] details = line.trim().split(";");
+                    if (details.length > 0) {
+                        ownedPacks.add(details[0].trim());
+                        purchasesListAdapter.addPack(details[0], details[1], details[2], Long.valueOf(details[3]));
+                    }
                 }
 
                 Log.d(LOG_TAG, "ownedPacks = " + ownedPacks.size());
@@ -735,6 +790,11 @@ public class StoreActivity extends AppCompatActivity {
         return true;
     }
     private void showSamplePacks(){
+        // Record Firebase event
+        Bundle bundle = new Bundle();
+        bundle.putString(FirebaseAnalytics.Param.ITEM_CATEGORY, "Sample Packs");
+        firebaseAnalytics.logEvent(FirebaseAnalytics.Event.VIEW_ITEM_LIST, bundle);
+
         final ListView sampleList = (ListView)rootLayout.findViewById(R.id.sample_pack_listview);
         if (sampleList.getVisibility() != View.VISIBLE){
             AnimatorSet set = Animations.fadeIn(sampleList, 200, 0);
@@ -794,7 +854,6 @@ public class StoreActivity extends AppCompatActivity {
         final ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
         if (purchasesListAdapter == null){
             purchasesListAdapter = new PurchasesListAdapter(context, R.layout.store_purchase_item);
-            purchasesListAdapter.addPacks(ownedPacks);
             purchasesList.setAdapter(purchasesListAdapter);
         }
         if (purchasesList.getVisibility() != View.VISIBLE){
@@ -922,8 +981,10 @@ public class StoreActivity extends AppCompatActivity {
                 AuthUI.getInstance()
                         .createSignInIntentBuilder()
                         .setProviders(Arrays.asList(new AuthUI.IdpConfig.Builder(AuthUI.EMAIL_PROVIDER).build(),
-                                new AuthUI.IdpConfig.Builder(AuthUI.GOOGLE_PROVIDER).build()))
+                                new AuthUI.IdpConfig.Builder(AuthUI.GOOGLE_PROVIDER).build(),
+                                new AuthUI.IdpConfig.Builder(AuthUI.FACEBOOK_PROVIDER).build()))
                         .setIsSmartLockEnabled(!BuildConfig.DEBUG)
+                        .setTheme(R.style.FirebaseUITheme)
                         .build(),
                 RC_SIGN_IN);
     }
@@ -1013,6 +1074,33 @@ public class StoreActivity extends AppCompatActivity {
         rootLayout.addView(layout);
         Animations.slideUp(layout, 200, 0, rootLayout.getHeight() / 3).start();
     }
+    public void SignInClick(View v){
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user == null)
+            startSignInFlow();
+        else if (user.isAnonymous())
+            startSignInFlow();
+        else
+            signOut();
+    }
+    private void signOut(){
+        AuthUI.getInstance()
+                .signOut(this)
+                .addOnCompleteListener(new OnCompleteListener<Void>() {
+                    public void onComplete(@NonNull Task<Void> task) {
+                        // user is now signed out
+                        ActionBar actionBar = getSupportActionBar();
+                        if (actionBar != null){
+                            TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
+                            button.setText(R.string.sign_in);
+                        }
+                        SharedPreferences.Editor editor = getSharedPreferences(ACCOUNT_PREFS, MODE_PRIVATE).edit();
+                        editor.putBoolean(AUTO_SIGN_IN, false);
+                        editor.apply();
+                        Toast.makeText(context, R.string.sign_out_success, Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
 
     // Purchase and download
     private IabHelper mBillingHelper;
@@ -1044,8 +1132,8 @@ public class StoreActivity extends AppCompatActivity {
         } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
     }
     private void downloadPack(final String name){
-        final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), "Downloading sample pack", Snackbar.LENGTH_INDEFINITE);
-        snackbar.setAction("Dismiss", new View.OnClickListener() {
+        final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), R.string.downloading, Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction(R.string.dismiss, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 snackbar.dismiss();
@@ -1070,14 +1158,12 @@ public class StoreActivity extends AppCompatActivity {
                                     @Override
                                     public void run() {
                                         snackbar.dismiss();
-                                        Snackbar.make(findViewById(R.id.coordinator_layout), "Sample pack installed", Snackbar.LENGTH_LONG).show();
-                                        if (BuildConfig.DEBUG)
-                                            updatePurchaseRecord(name);
+                                        Snackbar.make(findViewById(R.id.coordinator_layout), R.string.pack_install_complete, Snackbar.LENGTH_LONG).show();
                                     }
                                 });
                             } catch (IOException e){
                                 snackbar.dismiss();
-                                Toast.makeText(context, "Error decompressing zip file", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(context, R.string.unzip_error, Toast.LENGTH_SHORT).show();
                                 e.printStackTrace();
                             }
 
@@ -1088,7 +1174,7 @@ public class StoreActivity extends AppCompatActivity {
         } catch (IOException e){
             snackbar.dismiss();
             e.printStackTrace();
-            Toast.makeText(context, "Error downloading file", Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, R.string.download_error, Toast.LENGTH_SHORT).show();
         }
     }
     private void querySkuDetails(){
@@ -1132,6 +1218,7 @@ public class StoreActivity extends AppCompatActivity {
     }
     private void makePurchase(String uid, String sku, final String packName){
         restartPurchaseFlow = false;
+
         try {
             mBillingHelper.launchPurchaseFlow(this, sku, RC_PURCHASE,
                     new IabHelper.OnIabPurchaseFinishedListener() {
@@ -1139,12 +1226,19 @@ public class StoreActivity extends AppCompatActivity {
                         public void onIabPurchaseFinished(IabResult result, Purchase info) {
                             if (result.isFailure()) {
                                 Log.e(LOG_TAG, "Error purchasing: " + result);
+                                Toast.makeText(context, getString(R.string.purchase_error, result.getMessage()), Toast.LENGTH_LONG).show();
                                 return;
                             }
 
                             Log.i(LOG_TAG, "Purchase complete");
                             // Save record of purchase
-                            updatePurchaseRecord(packName);
+                            updatePurchaseRecord(packName, info);
+
+                            // Record Firebase event for purchase reporting
+                            Bundle bundle = new Bundle();
+                            bundle.putString(FirebaseAnalytics.Param.ITEM_ID, packName);
+                            bundle.putString(FirebaseAnalytics.Param.ITEM_CATEGORY, parentPacks.get(packName));
+                            firebaseAnalytics.logEvent(SAMPLE_PACK_PURCHASE, bundle);
 
                             // Consume purchase
                             try {
@@ -1167,14 +1261,23 @@ public class StoreActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-    private void updatePurchaseRecord(String packName){
-        ownedPacks.add(packName);
+    private void updatePurchaseRecord(String packName, Purchase info){
         File recordFile = new File(getFilesDir(), "purchases.txt");
         try {
             // Write local record
-            if (!recordFile.exists()) recordFile.createNewFile();
-            FileWriter writer = new FileWriter(recordFile);
-            writer.append(packName + "\n");
+            // packName;orderId;purchaseTime
+            if (!recordFile.exists()) {
+                recordFile.createNewFile();
+            }
+            FileWriter writer = new FileWriter(recordFile, true);
+            writer.append("\n");
+            writer.append(packName);
+            writer.append(";");
+            writer.append(samplePackListAdapter.getPackDisplayTitle(packName));
+            writer.append(";");
+            writer.append(info.getOrderId());
+            writer.append(";");
+            writer.append(String.valueOf(info.getPurchaseTime()));
             writer.flush();
             writer.close();
 
@@ -1189,6 +1292,9 @@ public class StoreActivity extends AppCompatActivity {
                     }
                 });
             }
+            ownedPacks.add(packName);
+            samplePackListAdapter.notifyDataSetChanged();
+            purchasesListAdapter.notifyDataSetChanged();
         } catch (IOException e) {
             e.printStackTrace();
         }

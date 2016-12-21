@@ -20,6 +20,9 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -286,5 +289,63 @@ public class Utils {
         }
 
         return new Point(Math.round(new_width), Math.round(new_height));
+    }
+
+    // Time & Dates
+    /**
+     * Return date in specified format.
+     * @param milliSeconds Date in milliseconds
+     * @param dateFormat Date format
+     * @return String representing date in specified format
+     */
+    public static String getDate(long milliSeconds, String dateFormat) {
+        // Create a DateFormatter object for displaying date in specified format.
+        SimpleDateFormat formatter = new SimpleDateFormat(dateFormat, Locale.getDefault());
+
+        // Create a calendar object that will convert the date and time value in milliseconds to date.
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(milliSeconds);
+        return formatter.format(calendar.getTime());
+    }
+
+    public static final long SEC_IN_MILLIS = 1000;
+    public static final long MIN_IN_MILLIS = SEC_IN_MILLIS * 60;
+    public static final long HOUR_IN_MILLIS = MIN_IN_MILLIS * 60;
+    public static final long DAY_IN_MILLIS = HOUR_IN_MILLIS * 24;
+    public static final long WEEK_IN_MILLIS = DAY_IN_MILLIS * 7;
+    public static final long MONTH_IN_MILLIS = DAY_IN_MILLIS * 30;
+
+    public static String getTimeAgo(Resources res, long millis){
+        long elapsedMillis = System.currentTimeMillis() - millis;
+
+        if (elapsedMillis < MIN_IN_MILLIS)
+            return res.getString(R.string.just_now);
+        else if (elapsedMillis < 2 * MIN_IN_MILLIS)
+            return res.getQuantityString(R.plurals.minute_ago_plurals, 1, 1);
+        else if (elapsedMillis < 45 * MIN_IN_MILLIS) {
+            int minutes = (int)(elapsedMillis / MIN_IN_MILLIS);
+            return res.getQuantityString(R.plurals.minute_ago_plurals, minutes, minutes);
+        } else if (elapsedMillis < 1.5 * HOUR_IN_MILLIS){
+            return res.getQuantityString(R.plurals.hour_ago_plurals, 1, 1);
+        }
+        else if (elapsedMillis < 20 * HOUR_IN_MILLIS){
+            int hours = (int)(elapsedMillis / HOUR_IN_MILLIS);
+            return res.getQuantityString(R.plurals.hour_ago_plurals, hours, hours);
+        }
+        else if (elapsedMillis < WEEK_IN_MILLIS) {
+            int days = Math.max(1, (int)(elapsedMillis / DAY_IN_MILLIS));
+            return res.getQuantityString(R.plurals.day_ago_plurals, days, days);
+        }
+        else if (elapsedMillis < MONTH_IN_MILLIS) {
+            int weeks = (int)(elapsedMillis / WEEK_IN_MILLIS);
+            return res.getQuantityString(R.plurals.week_ago_plurals, weeks, weeks);
+        }
+        else if (elapsedMillis < MONTH_IN_MILLIS * 6){
+            int months = (int)(elapsedMillis / MONTH_IN_MILLIS);
+            return res.getQuantityString(R.plurals.month_ago_plurals, months, months);
+        }
+        else {
+            return res.getString(R.string.long_time_ago);
+        }
     }
 }

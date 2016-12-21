@@ -28,6 +28,7 @@ import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.*;
 import android.preference.PreferenceManager;
+import android.support.annotation.Nullable;
 import android.support.v7.app.ActionBar;
 import android.support.v7.content.res.AppCompatResources;
 import android.support.v7.view.ActionMode;
@@ -38,7 +39,6 @@ import android.util.SparseArray;
 import android.view.DragEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
@@ -58,6 +58,11 @@ import android.widget.NumberPicker;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.InterstitialAd;
+import com.google.android.gms.ads.MobileAds;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -167,8 +172,6 @@ public class LaunchPadActivity extends AppCompatActivity {
     private int sampleLibraryIndex = -1;
     private MediaPlayer samplePlayer;
     private Runtime runtime;
-
-    // Firebase
 
     // Activity overrides
     @Override
@@ -285,8 +288,6 @@ public class LaunchPadActivity extends AppCompatActivity {
                 if (!isEditMode) {
                     isRecording = false;
                     gotoEditMode();
-                    View v = findViewById(activePads.get(0));
-                    v.callOnClick();
                 } else {
                     gotoPlayMode();
                 }
@@ -295,6 +296,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 if (isPlaying || isRecording) {
                     item.setIcon(R.drawable.ic_action_av_play_arrow);
                     stopPlayBack();
+                    showInterstitialAd();
                 }
                 else if (launchEvents.size() > 0 && playEventIndex < launchEvents.size()){
                     item.setIcon(R.drawable.ic_action_av_pause);
@@ -491,6 +493,8 @@ public class LaunchPadActivity extends AppCompatActivity {
             actionBar.setDisplayShowCustomEnabled(true);
         }
 
+        // Initialize Ads
+        initializeAds();
 
         if (savedData != null){
             samples = savedData.getSamples();
@@ -899,6 +903,9 @@ public class LaunchPadActivity extends AppCompatActivity {
                 }
             });
         }
+        if (activePads.size() > 0){
+            findViewById(activePads.get(0)).callOnClick();
+        }
     }
     private void updatePadOverlay(){
         TextView textView;
@@ -967,6 +974,28 @@ public class LaunchPadActivity extends AppCompatActivity {
         AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
         set.setInterpolator(new AccelerateDecelerateInterpolator());
         set.playTogether(slideLeft, slideUp, fadeOut);
+        // Show add after animation
+        set.addListener(new Animator.AnimatorListener() {
+            @Override
+            public void onAnimationStart(Animator animator) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animator) {
+                showInterstitialAd();
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animator) {
+
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animator) {
+
+            }
+        });
         set.start();
     }
     public void toolBarClick(View v){
@@ -1095,10 +1124,15 @@ public class LaunchPadActivity extends AppCompatActivity {
             v.setSelected(true);
         }
     }
-    private void listItemEditClick(int index){
+    private void mySamplesListItemEditClick(int index){
             Intent intent = new Intent(Intent.ACTION_SEND, null, context, SampleEditActivity.class);
                 intent.putExtra(SAMPLE_PATH, sampleListAdapter.getItem(index).getAbsolutePath());
             startActivityForResult(intent, GET_SAMPLE);
+    }
+    private void samplePackListItemEditClick(String path){
+        Intent intent = new Intent(Intent.ACTION_SEND, null, context, SampleEditActivity.class);
+        intent.putExtra(SAMPLE_PATH, path);
+        startActivityForResult(intent, GET_SAMPLE);
     }
     protected class PadDragEventListener implements View.OnDragListener {
         public boolean onDrag(View v, DragEvent event) {
@@ -1213,11 +1247,22 @@ public class LaunchPadActivity extends AppCompatActivity {
             hideSampleLibrary();
         }
         else if (!(isPlaying || isRecording)) showSampleLibrary();
+        else {
+            isRecording = false;
+            boolean isTouched = false;
+            for (int i : activePads){
+                isTouched = isTouched || samples.get(i).audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
+            }
+            if (!isTouched) showSampleLibrary();
+        }
     }
     private void showSampleLibrary(){
         if (!isSampleLibraryShowing) {
+            if (!isEditMode) gotoEditMode();
             final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
             ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
+
+            if (sampleListAdapter.getCount() < 1 && samplePackListAdapter.getCount() < 2) SamplePacksClick(null);
 
             // Start the animation
             AnimatorSet set = new AnimatorSet();
@@ -1395,7 +1440,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 @Override
                 public void onClick(View v) {
                     if (v.isActivated() || v.isSelected())
-                        listItemEditClick(position);
+                        mySamplesListItemEditClick(position);
                 }
             });
             return  convertView;
@@ -1662,6 +1707,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         private ArrayList<String> folderNames;
         private HashMap<String, ArrayList<String>> fileNames;
         private String samplePackName;
+        private View currentlyPlayingButton, previousView;
 
         public SamplePackFilesListAdapter(Context context, int groupResourceId, int childResourceId){
             this.context = context;
@@ -1721,8 +1767,67 @@ public class LaunchPadActivity extends AppCompatActivity {
                 convertView = mInflater.inflate(childResourceId, null);
             }
 
-            TextView filenameView = (TextView)convertView.findViewById(R.id.textView);
+            TextView filenameView = (TextView)convertView.findViewById(R.id.sample_file_name);
             filenameView.setText(fileNames.get(folderNames.get(groupPosition)).get(childPosition));
+            ImageView pauseButton = (ImageView)convertView.findViewById(R.id.pause_icon);
+            pauseButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(final View v) {
+                    if (currentlyPlayingButton != null && !currentlyPlayingButton.equals(v)) currentlyPlayingButton.setSelected(false);
+                    currentlyPlayingButton = v;
+                    if (previousView != null) v.setActivated(false);
+                    if (v.isSelected()){
+                        v.setSelected(false);
+                        if (samplePlayer != null) {
+                            samplePlayer.stop();
+                            samplePlayer.release();
+                            samplePlayer = null;
+                        }
+                    } else {
+                        v.setSelected(true);
+                        if (samplePlayer != null) {
+                            if (samplePlayer.isPlaying())
+                                samplePlayer.stop();
+                            samplePlayer.release();
+                            samplePlayer = null;
+                        }
+                        samplePlayer = new MediaPlayer();
+                        try {
+                            samplePlayer.setDataSource(getChild(groupPosition, childPosition));
+                            samplePlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                                @Override
+                                public void onCompletion(MediaPlayer mp) {
+                                    currentlyPlayingButton.setSelected(false);
+                                    samplePlayer.release();
+                                    samplePlayer = null;
+                                }
+                            });
+                            samplePlayer.prepare();
+                            samplePlayer.start();
+                            listItemPauseButton = v;
+                        } catch (IOException e){e.printStackTrace();}
+                    }
+                }
+            });
+
+            ImageView editButton = (ImageView)convertView.findViewById(R.id.item_edit_icon);
+            editButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (v.isActivated() || v.isSelected())
+                        samplePackListItemEditClick(getChild(groupPosition, childPosition));
+                }
+            });
+
+            convertView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    if (previousView != null && !previousView.equals(view))
+                        previousView.setActivated(false);
+                    view.setActivated(true);
+                    previousView = view;
+                }
+            });
 
             convertView.setOnLongClickListener(new View.OnLongClickListener() {
                 @Override
@@ -1785,6 +1890,45 @@ public class LaunchPadActivity extends AppCompatActivity {
     public void OpenStore(View v){
         Intent intent = new Intent(context, StoreActivity.class);
         startActivityForResult(intent, STORE_RESULT);
+    }
+
+    // Admob Advertising
+    public static final String SHOW_ADS = "SHOW_ADS";
+    private int interactionCount = 0;
+    private InterstitialAd mInterstitialAd;
+    private void initializeAds(){
+        if (activityPrefs.getBoolean(SHOW_ADS, true)) {
+            MobileAds.initialize(getApplicationContext(), getString(R.string.admob_id));
+            mInterstitialAd = new InterstitialAd(this);
+            mInterstitialAd.setAdUnitId(getString(R.string.launch_pad_activity_interstitial_ad_id));
+
+            requestNewInterstitial();
+        }
+    }
+    private void requestNewInterstitial() {
+        if (activityPrefs.getBoolean(SHOW_ADS, true)) {
+            AdRequest adRequest = new AdRequest.Builder()
+                    .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
+                    .build();
+
+            mInterstitialAd.setAdListener(new AdListener() {
+                @Override
+                public void onAdClosed() {
+                    requestNewInterstitial();
+                }
+            });
+            mInterstitialAd.loadAd(adRequest);
+        }
+    }
+    private void showInterstitialAd(){
+        interactionCount++;
+        if (activityPrefs.getBoolean(SHOW_ADS, true)
+                && mInterstitialAd != null
+                && mInterstitialAd.isLoaded()
+                && interactionCount > 5) {
+            mInterstitialAd.show();
+            interactionCount = 0;
+        }
     }
 
     // Handles touch events in record mode;

@@ -24,6 +24,7 @@ import android.os.Process;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.content.res.ResourcesCompat;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.content.res.AppCompatResources;
 import android.support.v7.view.ActionMode;
@@ -47,6 +48,11 @@ import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
+import com.google.firebase.analytics.FirebaseAnalytics;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,9 +100,10 @@ public class SampleEditActivity extends AppCompatActivity {
     private View popup;
     private boolean saveSlice;
 
+    // Firebase
+    private FirebaseAnalytics firebaseAnalytics;
+
     private Menu actionBarMenu;
-    // Sample edit context menu
-    private ActionMode sampleEditActionMode;
     // Beat edit context menu
     private ActionMode beatEditActionMode;
 
@@ -124,10 +131,36 @@ public class SampleEditActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_sample_edit);
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
+
+        // Store reference to activity context to use inside event handlers
+        context = this;
+
         Toolbar toolbar = (Toolbar)rootLayout.findViewById(R.id.my_toolbar);
-        toolbar.setTitleTextColor(ResourcesCompat.getColor(getResources(), R.color.text_primary_light, null));
         toolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
+        toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
         setSupportActionBar(toolbar);
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.setDisplayHomeAsUpEnabled(true);
+        }
+
+        // Firebase analytics
+        firebaseAnalytics = FirebaseAnalytics.getInstance(context);
+        Bundle bundle = new Bundle();
+        bundle.putString(FirebaseAnalytics.Param.ITEM_ID, "SampleEditActivity");
+        firebaseAnalytics.logEvent("ACTIVITY_START", bundle);
+
+        // Admob
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        if (prefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+            MobileAds.initialize(getApplicationContext(), getString(R.string.admob_id));
+            AdView mAdView = (AdView) findViewById(R.id.adView);
+            mAdView.setVisibility(View.VISIBLE);
+            AdRequest adRequest = new AdRequest.Builder()
+                    .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
+                    .build();
+            mAdView.loadAd(adRequest);
+        }
 
         // Prepare stoarage directory
         if (Utils.isExternalStorageWritable()){
@@ -146,8 +179,6 @@ public class SampleEditActivity extends AppCompatActivity {
 
         PreferenceManager.setDefaultValues(this, R.xml.sample_edit_preferences, true);
         pref = PreferenceManager.getDefaultSharedPreferences(this);
-        // Store reference to activity context to use inside event handlers
-        context = this;
         // Store a reference to the path for the temporary cache of the wav file
         WAV_CACHE_FILE_PATH = CACHE_PATH.getAbsolutePath() + "/cache.wav";
 
@@ -829,12 +860,12 @@ public class SampleEditActivity extends AppCompatActivity {
                 if (v.isSelected()){
                     loop = false;
                     v.setSelected(false);
-                    v.setBackgroundResource(R.drawable.ic_action_av_loop);
+                    v.setBackgroundResource(R.drawable.ic_av_loop);
                 }
                 else {
                     loop = true;
                     v.setSelected(true);
-                    v.setBackgroundResource(R.drawable.ic_action_av_loop_selected);
+                    v.setBackgroundResource(R.drawable.ic_av_loop_selected);
                 }
                 return;
             case R.id.action_edit_beats:

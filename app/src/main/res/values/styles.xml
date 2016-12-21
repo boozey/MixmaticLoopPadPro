@@ -14,6 +14,16 @@
         <item name="android:textColorPrimary">@color/text_primary_light</item>
     </style>
 
+    <style name="FirebaseUITheme" parent="FirebaseUI">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/primary_accent</item>
+        <item name="colorControlNormal">@color/primary</item>
+        <item name="colorControlActivated">@color/primary</item>
+        <item name="colorControlHighlight">@color/primary_accent</item>
+        <item name="android:windowBackground">@color/primary_dark</item>
+    </style>
+
     <style name="ActionBarTheme" parent="@style/Widget.AppCompat.Light.ActionBar.Solid.Inverse">
         <item name="android:background">@color/primary</item>
         <item name="popupTheme">@style/ActionBarPopupTheme</item>

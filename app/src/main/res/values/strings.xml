@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">Mixmatic Loop Pad</string>
-    <string name="mixmatic">Mixmatic</string>
-    <string name="loop_pad">Loop Pad</string>
-    <string name="title_activity_launch_pad">Mixmatic Loop Pad</string>
+    <string name="app_name" translatable="false">Mixmatic Loop Pad</string>
+
+    <!-- Admob ad unit id strings-->
+    <string name="admob_id" translatable="false">ca-app-pub-4640479150069852~9455449521</string>
+    <string name="launch_pad_activity_interstitial_ad_id" translatable="false">ca-app-pub-4640479150069852/9227646327</string>
+    <string name="sample_edit_banner_ad_id" translatable="false">ca-app-pub-4640479150069852/3320713529</string>
+
+    <!-- Facebook app id-->
+    <string name="facebook_application_id" translatable="false">753482518050805</string>
+    <string name="facebook_app_id" translatable="false">753482518050805</string>
+
+    <string name="mixmatic" translatable="false">Mixmatic</string>
+    <string name="loop_pad" translatable="false">Loop Pad</string>
+    <string name="title_activity_launch_pad" translatable="false">Mixmatic Loop Pad</string>
     <string name="unlicensed_message">This app is not properly licensed.  Go to Google Play Store to download a licensed version?</string>
     <string name="unlicensed_retry_message">Unable to verify license.  This is probably due to a network error.  Retry?</string>
     <string name="create_first_sample_msg">Create first sample</string>
@@ -28,6 +38,7 @@
     <string name="pause">Pause</string>
     <string name="no_thanks">No thanks</string>
     <string name="dont_show_again">Don\'t show this again</string>
+    <string name="dismiss">Dismiss</string>
 
     <!-- Error message strings -->
     <string name="error_sample_load">Error loading sample</string>
@@ -45,14 +56,24 @@
     <string name="buy">Buy</string>
     <string name="download">Download</string>
     <string name="purchasing">Completing purchase</string>
-    <string name="downloading">Downloading</string>
+    <string name="downloading">Downloading sample pack</string>
     <string name="decompressing">Decompressing</string>
     <string name="downloaded">Downloaded</string>
+    <string name="pack_install_complete">Sample pack installed</string>
+    <string name="untitled">Untitled</string>
     <string name="create_account_prompt">Do you want to create an account?</string>
     <string name="account_explanation">Sign in with your email address or Google account.
         This will keep track of your purchases across devices and allow you to re-download sample packs.
         Without an account, you will be responsible for saving or transferring any files that have been purchased and downloaded.</string>
     <string name="store_error_msg">Unable to contact Google Billing</string>
+    <string name="purchase_error">Error making purchase: + %s</string>
+    <string name="unzip_error">Error decompressing. Try downloading again.</string>
+    <string name="download_error">Error downloading file.  Please try again.</string>
+    <string name="sign_in_success">Signed-in</string>
+    <string name="no_network">Unable to sign-in.  Check network connection.</string>
+    <string name="auth_error">Authentication failed.  Please try again.</string>
+    <string name="sign_out">Sign out</string>
+    <string name="sign_out_success">Signed-out</string>
 
     <!-- Strings for Sample Edit Activity main menu -->
     <string name="action_trim_wav">Trim to selection</string>
@@ -138,10 +159,30 @@
     <string name="resample_msg">Re-sampling</string>
     <string name="save_resample_msg">Save sample?</string>
 
-    <!-- Admob ad unit id strings-->
-    <string name="sample_edit_banner_ad_id">ca-app-pub-4640479150069852/3320713529</string>
 
-    <!-- Facebook app id-->
-    <string name="facebook_app_id">753482518050805</string>
+    <!-- Time Strings and Plurals -->
+    <string name="just_now">Just now</string>
+    <string name="long_time_ago">A long time ago</string>
+    <plurals name="minute_ago_plurals">
+        <item quantity="one">A minute ago</item>
+        <item quantity="few">A few minutes ago</item>
+        <item quantity="other">%d minutes ago</item>
+    </plurals>
+    <plurals name="hour_ago_plurals">
+        <item quantity="one">About an hour ago</item>
+        <item quantity="other">%d hours ago</item>
+    </plurals>
+    <plurals name="day_ago_plurals">
+        <item quantity="one">Yesterday</item>
+        <item quantity="other">%d days ago</item>
+    </plurals>
+    <plurals name="week_ago_plurals">
+        <item quantity="one">Last week</item>
+        <item quantity="other">%d weeks ago</item>
+    </plurals>
+    <plurals name="month_ago_plurals">
+        <item quantity="one">Last month</item>
+        <item quantity="other">%d months ago</item>
+    </plurals>
 
 </resources>
