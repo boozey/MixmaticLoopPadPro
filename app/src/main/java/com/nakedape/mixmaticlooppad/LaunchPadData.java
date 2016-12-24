@@ -19,6 +19,7 @@ public class LaunchPadData extends Fragment {
     private boolean isEditMode;
     private ArrayList<Integer> activePads;
     private ArrayList<LaunchPadActivity.LaunchEvent> launchEvents;
+    private ArrayList<LaunchPadActivity.LaunchEvent> launchQueue;
     private int playEventIndex;
     private ArrayList<Integer> padIds;
     private long recordingEndTime;
@@ -47,6 +48,8 @@ public class LaunchPadData extends Fragment {
     public ArrayList<Integer> getActivePads() {return activePads;}
     public void setLaunchEvents(ArrayList<LaunchPadActivity.LaunchEvent> launchEvents) {this.launchEvents = launchEvents;}
     public ArrayList<LaunchPadActivity.LaunchEvent> getLaunchEvents() {return launchEvents;}
+    public void setLaunchQueue(ArrayList<LaunchPadActivity.LaunchEvent> launchQueue) {this.launchQueue = launchQueue;}
+    public ArrayList<LaunchPadActivity.LaunchEvent> getLaunchQueue() {return launchQueue;}
     public void setPlayEventIndex(int playEventIndex) {this.playEventIndex = playEventIndex;}
     public int getPlayEventIndex() {return playEventIndex;}
     public void setPadIds(ArrayList<Integer> padIds) {this.padIds = padIds;}

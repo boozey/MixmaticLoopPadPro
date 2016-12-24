@@ -48,6 +48,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.storage.FileDownloadTask;
 import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
@@ -761,7 +762,7 @@ public class StoreActivity extends AppCompatActivity {
                 String line;
                 while ((line = reader.readLine()) != null){
                     String[] details = line.trim().split(";");
-                    if (details.length > 0) {
+                    if (details.length == 4) {
                         ownedPacks.add(details[0].trim());
                         purchasesListAdapter.addPack(details[0], details[1], details[2], Long.valueOf(details[3]));
                     }
@@ -1132,7 +1133,7 @@ public class StoreActivity extends AppCompatActivity {
         } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
     }
     private void downloadPack(final String name){
-        final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), R.string.downloading, Snackbar.LENGTH_INDEFINITE);
+        final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.downloading, 0), Snackbar.LENGTH_INDEFINITE);
         snackbar.setAction(R.string.dismiss, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -1145,9 +1146,15 @@ public class StoreActivity extends AppCompatActivity {
         try {
             downloadFile.createNewFile();
             StorageReference downloadRef = packFolderRef.child(name + ".zip");
-            downloadRef.getFile(downloadFile).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
+            downloadRef.getFile(downloadFile).addOnProgressListener(new OnProgressListener<FileDownloadTask.TaskSnapshot>() {
+                @Override
+                public void onProgress(FileDownloadTask.TaskSnapshot taskSnapshot) {
+                    snackbar.setText(getString(R.string.downloading, taskSnapshot.getBytesTransferred() * 100 / taskSnapshot.getTotalByteCount()));
+                }
+            }).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
                 @Override
                 public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
+                    snackbar.setText(R.string.decompressing);
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
@@ -1158,7 +1165,7 @@ public class StoreActivity extends AppCompatActivity {
                                     @Override
                                     public void run() {
                                         snackbar.dismiss();
-                                        Snackbar.make(findViewById(R.id.coordinator_layout), R.string.pack_install_complete, Snackbar.LENGTH_LONG).show();
+                                        Snackbar.make(findViewById(R.id.coordinator_layout), R.string.pack_install_complete, Snackbar.LENGTH_SHORT).show();
                                     }
                                 });
                             } catch (IOException e){
@@ -1270,7 +1277,7 @@ public class StoreActivity extends AppCompatActivity {
                 recordFile.createNewFile();
             }
             FileWriter writer = new FileWriter(recordFile, true);
-            writer.append("\n");
+            writer.append(System.getProperty("line.separator"));
             writer.append(packName);
             writer.append(";");
             writer.append(samplePackListAdapter.getPackDisplayTitle(packName));
@@ -1292,9 +1299,7 @@ public class StoreActivity extends AppCompatActivity {
                     }
                 });
             }
-            ownedPacks.add(packName);
-            samplePackListAdapter.notifyDataSetChanged();
-            purchasesListAdapter.notifyDataSetChanged();
+            LoadLocalPurchaseRec();
         } catch (IOException e) {
             e.printStackTrace();
         }

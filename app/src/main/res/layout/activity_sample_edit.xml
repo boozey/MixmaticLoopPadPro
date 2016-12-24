@@ -67,7 +67,7 @@
             android:layout_width="wrap_content"
             android:layout_margin="4dp"
             android:layout_height="wrap_content"
-            android:background="@drawable/ic_action_show_beats"
+            android:background="@drawable/ic_beat"
             android:onClick="toolBarClick"
             android:visibility="gone"/>
     </LinearLayout>

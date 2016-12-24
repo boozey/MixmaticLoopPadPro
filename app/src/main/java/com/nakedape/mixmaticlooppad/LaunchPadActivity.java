@@ -3,7 +3,6 @@ package com.nakedape.mixmaticlooppad;
 import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
-import android.app.AlertDialog;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
 import android.content.ClipData;
@@ -27,9 +26,11 @@ import android.media.MediaFormat;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.*;
+import android.os.Process;
 import android.preference.PreferenceManager;
-import android.support.annotation.Nullable;
 import android.support.v7.app.ActionBar;
+import android.support.v7.app.AlertDialog;
+import android.support.v7.app.AppCompatDialog;
 import android.support.v7.content.res.AppCompatResources;
 import android.support.v7.view.ActionMode;
 import android.support.v7.app.AppCompatActivity;
@@ -56,6 +57,7 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.NumberPicker;
 import android.widget.RelativeLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -101,6 +103,7 @@ public class LaunchPadActivity extends AppCompatActivity {
     public static String NUM_SLICES = "com.nakedape.mixmaticlooppad.numslices";
     public static String SLICE_PATHS = "com.nakedape.mixmaticlooppad.slicepaths";
     public static String SAMPLE_VOLUME = "com.nakedape.mixmaticlooppad.volume";
+    public static String QUANTIZE_MODE = "com.nakedape.mixmaticlooppad.quantize_mode";
     private static int GET_SAMPLE = 0;
     private static int GET_SLICES = 1;
 
@@ -253,6 +256,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 savedData.setRecording(isRecording);
                 savedData.setRecordingEndTime(recordingEndTime);
                 savedData.setLaunchEvents(launchEvents);
+                savedData.setLaunchQueue(launchQueue);
                 savedData.setPlayEventIndex(playEventIndex);
                 savedData.sampleFiles = sampleListAdapter.sampleFiles;
                 savedData.sampleLengths = sampleListAdapter.sampleLengths;
@@ -486,8 +490,9 @@ public class LaunchPadActivity extends AppCompatActivity {
             actionBar.setDisplayShowTitleEnabled(false);
             actionBar.setCustomView(R.layout.counter_bar);
             actionBar.setDisplayShowCustomEnabled(true);
-            counterTextView = (TextView)actionBar.getCustomView().findViewById(R.id.textViewCounter);
+            counterTextView = (TextView)actionBar.getCustomView().findViewById(R.id.counter_view);
             bpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 120);
+            ((TextView)actionBar.getCustomView().findViewById(R.id.bpm_view)).setText(getString(R.string.bpm_display, bpm));
             timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
             updateCounterMessage();
             actionBar.setDisplayShowCustomEnabled(true);
@@ -501,7 +506,7 @@ public class LaunchPadActivity extends AppCompatActivity {
             counter = savedData.getCounter();
             double sec = (double)counter / 1000;
             int min = (int)Math.floor(sec / 60);
-            counterTextView.setText(String.format(Locale.US, "%d BPM  %2d : %.2f", bpm, min, sec % 60));
+            counterTextView.setText(String.format(Locale.US, "%2d : %.2f", min, sec % 60));
             isEditMode = savedData.isEditMode();
             activePads = savedData.getActivePads();
             isRecording = savedData.isRecording();
@@ -511,18 +516,9 @@ public class LaunchPadActivity extends AppCompatActivity {
                 disconnectTouchListeners();
             launchEvents = savedData.getLaunchEvents();
             playEventIndex = savedData.getPlayEventIndex();
-            /*if (isRecording) {
-                View v = findViewById(R.id.button_play);
-                v.setBackgroundResource(R.drawable.button_pause);
-                new Thread(new CounterThread()).start();
-            }
-            if (isPlaying) {
-                View v = findViewById(R.id.button_play);
-                v.setBackgroundResource(R.drawable.button_pause);
-                new Thread(new playBackRecording()).start();
-            }*/
             sampleListAdapter.sampleFiles = savedData.sampleFiles;
             sampleListAdapter.sampleLengths = savedData.sampleLengths;
+            launchQueue = savedData.getLaunchQueue();
             // Setup touch pads from retained fragment
             setupPadsFromFrag();
         }
@@ -628,6 +624,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                         s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, false));
                         s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER));
                         s.setVolume(launchPadprefs.getFloat(padNumber + SAMPLE_VOLUME, 0.5f * AudioTrack.getMaxVolume()));
+                        s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE));
                         final int color = launchPadprefs.getInt(padNumber + COLOR, 0);
                         activePads.add(pad.getId());
                         // Animate the loading of the pad
@@ -747,8 +744,8 @@ public class LaunchPadActivity extends AppCompatActivity {
         s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, false));
         s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER));
         s.setVolume(launchPadprefs.getFloat(padNumber + SAMPLE_VOLUME, 0.5f * AudioTrack.getMaxVolume()));
-        int color = launchPadprefs.getInt(padNumber + COLOR, 0);
-        setPadColor(color, pad);
+        s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE));
+        pad.setBackgroundResource(padColorDrawables[launchPadprefs.getInt(padNumber + COLOR, 0)]);
     }
     private void setPadColor(int color, TouchPad pad){
         switch (color){ // Load and set color
@@ -765,29 +762,6 @@ public class LaunchPadActivity extends AppCompatActivity {
                 pad.setBackgroundResource(R.drawable.launch_pad_orange);
                 break;
         }
-    }
-    private void setSampleVolume(final int sampleId){
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        final NumberPicker numberPicker = new NumberPicker(context);
-        numberPicker.setMaxValue((int)(AudioTrack.getMaxVolume() * 100));
-        numberPicker.setValue((int)(samples.get(sampleId).getVolume() *100));
-        builder.setView(numberPicker);
-        builder.setPositiveButton(R.string.set, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                float volume = (float)numberPicker.getValue() / 100;
-                samples.get(sampleId).setVolume(volume);
-                TouchPad pad = (TouchPad)findViewById(sampleId);
-                String padNumber = (String)pad.getTag();
-                SharedPreferences.Editor editor = launchPadprefs.edit();
-                editor.putFloat(padNumber + SAMPLE_VOLUME, volume);
-                editor.apply();
-                dialog.dismiss();
-            }
-        });
-        builder.setNegativeButton(R.string.cancel, null);
-        AlertDialog dialog = builder.create();
-        dialog.show();
     }
     private void removeSample(int sampleId){
         Sample s = samples.get(sampleId);
@@ -882,7 +856,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         waveFile.Close();
     }
 
-    // Edit mode methods
+    /** Edit Mode **/
     private int[] padTextViewIds = {R.id.touchPad1_textview, R.id.touchPad2_textview, R.id.touchPad3_textview, R.id.touchPad4_textview,
             R.id.touchPad5_textview, R.id.touchPad6_textview, R.id.touchPad7_textview, R.id.touchPad8_textview, R.id.touchPad9_textview,
             R.id.touchPad10_textview, R.id.touchPad11_textview, R.id.touchPad12_textview, R.id.touchPad13_textview, R.id.touchPad14_textview,
@@ -903,6 +877,7 @@ public class LaunchPadActivity extends AppCompatActivity {
                 }
             });
         }
+        stopPlayBack();
         if (activePads.size() > 0){
             findViewById(activePads.get(0)).callOnClick();
         }
@@ -942,132 +917,6 @@ public class LaunchPadActivity extends AppCompatActivity {
         hideSampleLibrary();
         isEditMode = false;
     }
-    private void showToolBar(){
-        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
-        overlay.setVisibility(View.VISIBLE);
-        View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
-        View doneButton = rootLayout.findViewById(R.id.done_button);
-        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
-        // Start the animation
-        AnimatorSet set = new AnimatorSet();
-        ObjectAnimator slideLeft = ObjectAnimator.ofFloat(toolBar, "TranslationX", -toolBar.getWidth(), 0);
-        slideLeft.setTarget(toolBar);
-        ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", doneButton.getHeight() + params.bottomMargin, 0);
-        slideUp.setTarget(doneButton);
-        AnimatorSet fadeIn = Animations.fadeIn(overlay, 200, 0);
-        set.setInterpolator(new AccelerateDecelerateInterpolator());
-        set.playTogether(slideLeft, slideUp, fadeIn);
-        set.start();
-    }
-    private void hideToolBar(){
-        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
-        overlay.setVisibility(View.GONE);
-        View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
-        View doneButton = rootLayout.findViewById(R.id.done_button);
-        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
-        // Start the animation
-        AnimatorSet set = new AnimatorSet();
-        ObjectAnimator slideLeft = ObjectAnimator.ofFloat(toolBar, "TranslationX", 0, -toolBar.getWidth());
-        slideLeft.setTarget(toolBar);
-        ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", 0, doneButton.getHeight() + params.bottomMargin);
-        slideUp.setTarget(doneButton);
-        AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
-        set.setInterpolator(new AccelerateDecelerateInterpolator());
-        set.playTogether(slideLeft, slideUp, fadeOut);
-        // Show add after animation
-        set.addListener(new Animator.AnimatorListener() {
-            @Override
-            public void onAnimationStart(Animator animator) {
-
-            }
-
-            @Override
-            public void onAnimationEnd(Animator animator) {
-                showInterstitialAd();
-            }
-
-            @Override
-            public void onAnimationCancel(Animator animator) {
-
-            }
-
-            @Override
-            public void onAnimationRepeat(Animator animator) {
-
-            }
-        });
-        set.start();
-    }
-    public void toolBarClick(View v){
-        SharedPreferences.Editor prefEditor = launchPadprefs.edit();
-        String padNumber = (String)findViewById(selectedSampleID).getTag();
-        switch (v.getId()){
-            case R.id.action_edit_sample:
-                editSample();
-                return;
-            case R.id.action_loop_mode:
-                if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getBoolean(padNumber + LOOPMODE, false)) {
-                    rootLayout.findViewById(R.id.action_loop_mode).setBackgroundResource(R.drawable.ic_av_loop);
-                    Sample s = samples.get(selectedSampleID);
-                    s.setLoopMode(false);
-                    prefEditor.putBoolean(padNumber + LOOPMODE, false);
-                    prefEditor.apply();
-                }
-                else if (samples.indexOfKey(selectedSampleID) >= 0) {
-                    rootLayout.findViewById(R.id.action_loop_mode).setBackgroundResource(R.drawable.ic_av_loop_selected);
-                    Sample s = samples.get(selectedSampleID);
-                    s.setLoopMode(true);
-                    prefEditor.putBoolean(padNumber + LOOPMODE, true);
-                    prefEditor.apply();
-                }
-                return;
-            case R.id.action_remove_sample:
-                if (samples.indexOfKey(selectedSampleID) >= 0){
-                    removeSample(selectedSampleID);
-                }
-                return;
-            case R.id.action_launch_mode:
-                if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER) == Sample.LAUNCHMODE_TRIGGER){
-                    rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_keyboard);
-                    Sample s = samples.get(selectedSampleID);
-                    s.setLaunchMode(Sample.LAUNCHMODE_GATE);
-                    prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
-                    prefEditor.apply();
-                } else if (samples.indexOfKey(selectedSampleID) >= 0){
-                    rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_album);
-                    Sample s = samples.get(selectedSampleID);
-                    s.setOnPlayFinishedListener(samplePlayListener);
-                    s.setLaunchMode(Sample.LAUNCHMODE_TRIGGER);
-                    prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
-                    prefEditor.apply();
-                }
-                return;
-            case R.id.action_pick_color:
-                AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                builder.setTitle(R.string.color_dialog_title);
-                builder.setItems(R.array.color_names, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        if (samples.indexOfKey(selectedSampleID) >= 0){
-                            View v = findViewById(selectedSampleID);// Load shared preferences to save color
-                            String padNumber = (String)v.getTag();
-                            v.setBackgroundResource(padColorDrawables[which]);
-                            SharedPreferences.Editor editor = launchPadprefs.edit();
-                            editor.putInt(padNumber + COLOR, which);
-                            editor.apply();
-                        }
-                    }
-                });
-                AlertDialog dialog = builder.create();
-                dialog.show();
-                return;
-            case R.id.action_set_volume:
-                setSampleVolume(selectedSampleID);
-                return;
-            default:
-                return;
-        }
-    }
     public void touchPadClick(View v) {
         if (isEditMode) {
             // Deselect the current touchpad
@@ -1079,17 +928,37 @@ public class LaunchPadActivity extends AppCompatActivity {
             selectedSampleID = v.getId();
             if (samples.indexOfKey(v.getId()) >= 0) {
                 String padNumber = (String)findViewById(selectedSampleID).getTag();
+
                 // Update toolbar
+                updateVolumeDisplay();
+
                 if (launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER) == Sample.LAUNCHMODE_GATE)
                     rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_keyboard);
                 else
                     rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_album);
+
                 if (launchPadprefs.getBoolean(padNumber + LOOPMODE, false))
                     rootLayout.findViewById(R.id.action_loop_mode).setBackgroundResource(R.drawable.ic_av_loop_selected);
                 else
                     rootLayout.findViewById(R.id.action_loop_mode).setBackgroundResource(R.drawable.ic_av_loop);
+
+                switch (launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE)){
+                    case Sample.Q_BEAT:
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_quarter_note);
+                        break;
+                    case Sample.Q_HALF_BEAT:
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_eigth_note);
+                        break;
+                    case Sample.Q_BAR:
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_whole_note);
+                        break;
+                    default:
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_beat);
+                        break;
+                }
             }
             else {
+                hideVolumePopup();
                 showSampleLibrary();
             }
         }
@@ -1235,10 +1104,281 @@ public class LaunchPadActivity extends AppCompatActivity {
                 }
             });
             pad.callOnClick();
+            setBpm(path);
         } else {
             notifySampleLoadError(sample);
         }
         updatePadOverlay();
+    }
+    private void setBpm(String path){
+        String filename = path.substring(path.lastIndexOf(File.pathSeparatorChar) + 1).toLowerCase();
+        String bpmString = "";
+        int bpmIndex = filename.indexOf("bpm");
+        for (int i = bpmIndex - 5; i < bpmIndex; i++){
+            if (Character.isDigit(filename.charAt(i)))
+                bpmString += filename.charAt(i);
+        }
+        Log.d(LOG_TAG, "bpm from filename: " + bpmString);
+
+        if (!bpmString.equals("")){
+            int newBpm = Integer.valueOf(bpmString);
+            if (activePads.size() == 1) {
+                bpm = newBpm;
+                SharedPreferences.Editor editor = activityPrefs.edit();
+                editor.putInt(LaunchPadPreferencesFragment.PREF_BPM, bpm);
+                editor.apply();
+                ActionBar actionBar = getSupportActionBar();
+                if (actionBar != null){
+                    ((TextView)actionBar.getCustomView().findViewById(R.id.bpm_view)).setText(getString(R.string.bpm_display, bpm));
+                }
+            } else if (newBpm != bpm) {
+                Toast.makeText(context, "This samples bpm doesn't match", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    // Tool bar
+    private void showToolBar(){
+        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
+        overlay.setVisibility(View.VISIBLE);
+        View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
+        View doneButton = rootLayout.findViewById(R.id.done_button);
+        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
+        // Start the animation
+        AnimatorSet set = new AnimatorSet();
+        ObjectAnimator slideLeft = ObjectAnimator.ofFloat(toolBar, "TranslationX", -toolBar.getWidth(), 0);
+        slideLeft.setTarget(toolBar);
+        ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", doneButton.getHeight() + params.bottomMargin, 0);
+        slideUp.setTarget(doneButton);
+        AnimatorSet fadeIn = Animations.fadeIn(overlay, 200, 0);
+        set.setInterpolator(new AccelerateDecelerateInterpolator());
+        set.playTogether(slideLeft, slideUp, fadeIn);
+        set.start();
+    }
+    private void hideToolBar(){
+        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
+        overlay.setVisibility(View.GONE);
+        View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
+        View doneButton = rootLayout.findViewById(R.id.done_button);
+        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
+        // Start the animation
+        AnimatorSet set = new AnimatorSet();
+        ObjectAnimator slideLeft = ObjectAnimator.ofFloat(toolBar, "TranslationX", 0, -toolBar.getWidth());
+        slideLeft.setTarget(toolBar);
+        ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", 0, doneButton.getHeight() + params.bottomMargin);
+        slideUp.setTarget(doneButton);
+        AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
+        set.setInterpolator(new AccelerateDecelerateInterpolator());
+        set.playTogether(slideLeft, slideUp, fadeOut);
+        if (rootLayout.findViewById(R.id.volume_popup).getVisibility() != View.GONE)
+            rootLayout.findViewById(R.id.volume_popup).setVisibility(View.GONE);
+        // Show add after animation
+        set.addListener(new Animator.AnimatorListener() {
+            @Override
+            public void onAnimationStart(Animator animator) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animator) {
+                showInterstitialAd();
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animator) {
+
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animator) {
+
+            }
+        });
+        set.start();
+    }
+    public void toolBarClick(View v){
+        SharedPreferences.Editor prefEditor = launchPadprefs.edit();
+        String padNumber = (String)findViewById(selectedSampleID).getTag();
+        switch (v.getId()){
+            case R.id.action_edit_sample:
+                editSample();
+                return;
+            case R.id.action_loop_mode:
+                if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getBoolean(padNumber + LOOPMODE, false)) {
+                    rootLayout.findViewById(R.id.action_loop_mode).setBackgroundResource(R.drawable.ic_av_loop);
+                    Sample s = samples.get(selectedSampleID);
+                    s.setLoopMode(false);
+                    prefEditor.putBoolean(padNumber + LOOPMODE, false);
+                    prefEditor.apply();
+                }
+                else if (samples.indexOfKey(selectedSampleID) >= 0) {
+                    rootLayout.findViewById(R.id.action_loop_mode).setBackgroundResource(R.drawable.ic_av_loop_selected);
+                    Sample s = samples.get(selectedSampleID);
+                    s.setLoopMode(true);
+                    prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                    prefEditor.apply();
+                }
+                return;
+            case R.id.action_remove_sample:
+                if (samples.indexOfKey(selectedSampleID) >= 0){
+                    removeSample(selectedSampleID);
+                }
+                return;
+            case R.id.action_launch_mode:
+                if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER) == Sample.LAUNCHMODE_TRIGGER){
+                    rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_keyboard);
+                    Sample s = samples.get(selectedSampleID);
+                    s.setLaunchMode(Sample.LAUNCHMODE_GATE);
+                    prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                    prefEditor.apply();
+                } else if (samples.indexOfKey(selectedSampleID) >= 0){
+                    rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_album);
+                    Sample s = samples.get(selectedSampleID);
+                    s.setOnPlayFinishedListener(samplePlayListener);
+                    s.setLaunchMode(Sample.LAUNCHMODE_TRIGGER);
+                    prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                    prefEditor.apply();
+                }
+                return;
+            case R.id.action_pick_color:
+                android.support.v7.app.AlertDialog.Builder builder = new android.support.v7.app.AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
+                builder.setTitle(R.string.color_dialog_title);
+                builder.setItems(R.array.color_names, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (samples.indexOfKey(selectedSampleID) >= 0){
+                            View v = findViewById(selectedSampleID);// Load shared preferences to save color
+                            String padNumber = (String)v.getTag();
+                            v.setBackgroundResource(padColorDrawables[which]);
+                            SharedPreferences.Editor editor = launchPadprefs.edit();
+                            editor.putInt(padNumber + COLOR, which);
+                            editor.apply();
+                        }
+                    }
+                });
+                AppCompatDialog dialog = builder.create();
+                dialog.show();
+                return;
+            case R.id.action_set_volume:
+                if (rootLayout.findViewById(R.id.volume_popup).getVisibility() != View.VISIBLE)
+                    showVolumePopup();
+                else
+                    hideVolumePopup();
+                return;
+            case R.id.action_quantize:
+                if (samples.indexOfKey(selectedSampleID) >= 0) {
+                    switch (launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE)) {
+                        case Sample.Q_NONE:
+                            samples.get(selectedSampleID).setQuantizationMode(Sample.Q_BEAT);
+                            prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BEAT);
+                            v.setBackgroundResource(R.drawable.ic_quarter_note);
+                            Log.d(LOG_TAG, "Beat");
+                            break;
+                        case Sample.Q_BEAT:
+                            samples.get(selectedSampleID).setQuantizationMode(Sample.Q_HALF_BEAT);
+                            prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_HALF_BEAT);
+                            v.setBackgroundResource(R.drawable.ic_eigth_note);
+                            Log.d(LOG_TAG, "Half beat");
+                            break;
+                        case Sample.Q_HALF_BEAT:
+                            samples.get(selectedSampleID).setQuantizationMode(Sample.Q_BAR);
+                            prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                            v.setBackgroundResource(R.drawable.ic_whole_note);
+                            Log.d(LOG_TAG, "Bar");
+                            break;
+                        case Sample.Q_BAR:
+                            samples.get(selectedSampleID).setQuantizationMode(Sample.Q_NONE);
+                            prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                            v.setBackgroundResource(R.drawable.ic_beat);
+                            Log.d(LOG_TAG, "None");
+                            break;
+                    }
+                    prefEditor.apply();
+                }
+            default:
+                return;
+        }
+    }
+    private void showVolumePopup(){
+        final View popup = rootLayout.findViewById(R.id.volume_popup);
+        if (popup.getVisibility() != View.VISIBLE) {
+            RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) popup.getLayoutParams();
+            params.topMargin = rootLayout.findViewById(R.id.pad_toolbar).getTop() + rootLayout.findViewById(R.id.action_set_volume).getTop();
+            popup.setLayoutParams(params);
+
+            final TextView volumeView = (TextView) popup.findViewById(R.id.volume_view);
+            volumeView.setText(String.valueOf((int)(samples.get(selectedSampleID).getVolume() * 100)));
+
+            final SeekBar volumeBar = (SeekBar) popup.findViewById(R.id.volume_slider_view);
+            volumeBar.setProgress((int)(samples.get(selectedSampleID).getVolume() * 100));
+            volumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                    volumeView.setText(String.valueOf(i));
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+
+                }
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                    float volume = (float)seekBar.getProgress() / 100;
+                    samples.get(selectedSampleID).setVolume(volume);
+                    TouchPad pad = (TouchPad)findViewById(selectedSampleID);
+                    String padNumber = (String)pad.getTag();
+                    SharedPreferences.Editor editor = launchPadprefs.edit();
+                    editor.putFloat(padNumber + SAMPLE_VOLUME, volume);
+                    editor.apply();
+                }
+            });
+
+            // Start the animation
+            popup.setVisibility(View.VISIBLE);
+            popup.setAlpha(0f);
+            AnimatorSet set = Animations.fadeIn(popup, 200, 0);
+            set.start();
+        }
+    }
+    private void updateVolumeDisplay(){
+        View popup = rootLayout.findViewById(R.id.volume_popup);
+        if (popup.getVisibility() == View.VISIBLE) {
+            TextView volumeView = (TextView) popup.findViewById(R.id.volume_view);
+            volumeView.setText(String.valueOf((int) (samples.get(selectedSampleID).getVolume() * 100)));
+
+            SeekBar volumeBar = (SeekBar) popup.findViewById(R.id.volume_slider_view);
+            volumeBar.setProgress((int) (samples.get(selectedSampleID).getVolume() * 100));
+        }
+    }
+    private void hideVolumePopup(){
+        final View popup = rootLayout.findViewById(R.id.volume_popup);
+        if (popup.getVisibility() != View.GONE) {
+            // Start the animation
+            AnimatorSet set = Animations.fadeOut(popup, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    popup.setVisibility(View.GONE);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
     }
 
     // Sample Library Methods
@@ -1894,7 +2034,7 @@ public class LaunchPadActivity extends AppCompatActivity {
 
     // Admob Advertising
     public static final String SHOW_ADS = "SHOW_ADS";
-    private int interactionCount = 0;
+    private int interactionCount = 5;
     private InterstitialAd mInterstitialAd;
     private void initializeAds(){
         if (activityPrefs.getBoolean(SHOW_ADS, true)) {
@@ -1925,12 +2065,15 @@ public class LaunchPadActivity extends AppCompatActivity {
         if (activityPrefs.getBoolean(SHOW_ADS, true)
                 && mInterstitialAd != null
                 && mInterstitialAd.isLoaded()
-                && interactionCount > 5) {
+                && interactionCount > 4) {
             mInterstitialAd.show();
             interactionCount = 0;
         }
     }
 
+
+    /** Recording and playback **/
+    private ArrayList<LaunchEvent> launchQueue;
     // Handles touch events in record mode;
     private View.OnTouchListener TouchPadTouchListener = new View.OnTouchListener() {
         @Override
@@ -1942,6 +2085,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         if (!isEditMode && !isPlaying && samples.indexOfKey(v.getId()) >= 0) {
             if (!isRecording){ // Start counter thread
                 isRecording = true;
+                launchQueue = new ArrayList<>(10);
                 counter = recordingEndTime;
                 actionBarMenu.findItem(R.id.action_play).setIcon(R.drawable.ic_action_av_pause);
                 new Thread(new CounterThread()).start();
@@ -1949,17 +2093,19 @@ public class LaunchPadActivity extends AppCompatActivity {
             Sample s = samples.get(v.getId());
             switch (event.getAction()) {
                 case MotionEvent.ACTION_UP:
-                    switch (s.getLaunchMode()){
-                        case Sample.LAUNCHMODE_GATE: // Stop sound and deselect pad
-                            s.stop();
-                            v.setPressed(false);
-                            launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
-                            break;
-                        default:
-                            break;
+                    if (s.getLaunchMode() == Sample.LAUNCHMODE_GATE) {// Stop sound and deselect pad
+                        s.stop();
+                        v.setPressed(false);
+                        launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
                     }
                     return true;
                 case MotionEvent.ACTION_DOWN:
+                    // If the sample is queued to launch, cancel it
+                    if (v.isActivated()){
+                        v.setActivated(false);
+                        cancelLaunchEvent(s);
+                        return true;
+                    }
                     // If the sound is already playing, stop it
                     if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
                         s.stop();
@@ -1967,18 +2113,64 @@ public class LaunchPadActivity extends AppCompatActivity {
                         launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
                         return true;
                     }
-                    // Otherwise play the sample
-                    else if (s.hasPlayed())
-                        s.reset();
-                    s.play();
-                    v.setPressed(true);
-                    launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_START, v.getId()));
+                    // Otherwise launch the sample
+                    launchSample(s, v);
                     return true;
                 default:
                     return false;
             }
         }
         return false;
+    }
+    private void launchSample(Sample s, View v){
+        if (s.hasPlayed())
+            s.reset();
+        LaunchEvent launchEvent;
+        switch (s.getQuantizationMode()){
+            case Sample.Q_BAR:
+                launchEvent = new LaunchEvent((Math.floor(beats) + timeSignature - Math.floor(beats) % timeSignature) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
+                launchEvents.add(launchEvent);
+                launchQueue.add(launchEvent);
+                v.setActivated(true);
+                break;
+            case Sample.Q_BEAT:
+                launchEvent = new LaunchEvent((Math.floor(beats) + 1) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
+                launchEvents.add(launchEvent);
+                launchQueue.add(launchEvent);
+                v.setActivated(true);
+                break;
+            case Sample.Q_HALF_BEAT:
+                launchEvent = new LaunchEvent((Math.floor(beats) + 0.5) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
+                launchEvents.add(launchEvent);
+                launchQueue.add(launchEvent);
+                v.setActivated(true);
+                break;
+            case Sample.Q_QUART_BEAT:
+                launchEvent = new LaunchEvent((Math.floor(beats) + 0.25) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
+                launchEvents.add(launchEvent);
+                launchQueue.add(launchEvent);
+                v.setActivated(true);
+                break;
+            case Sample.Q_NONE:
+                s.play();
+                v.setPressed(true);
+                launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_START, v.getId()));
+                break;
+        }
+    }
+    private void cancelLaunchEvent(Sample s){
+        for (int i = launchEvents.size() - 1; i > launchEvents.size() - 10; i--){
+            if (launchEvents.get(i).getSampleId() == s.getViewId()){
+                launchEvents.remove(i);
+                break;
+            }
+        }
+        for (LaunchEvent e : launchQueue){
+            if (e.getSampleId() == s.getViewId()){
+                launchQueue.remove(e);
+                break;
+            }
+        }
     }
 
     // Helper methods for menu commands
@@ -2070,7 +2262,7 @@ public class LaunchPadActivity extends AppCompatActivity {
     private class CounterThread implements Runnable {
         @Override
         public void run(){
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            android.os.Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
             long startMillis = SystemClock.elapsedRealtime() - counter;
             do {
                 try {
@@ -2081,6 +2273,16 @@ public class LaunchPadActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         updateCounterMessage();
+                        ArrayList<LaunchEvent> tempQueue = (ArrayList<LaunchEvent>)launchQueue.clone();
+                        for (LaunchEvent event : tempQueue){
+                            if (counter >= event.getTimeStamp()) {
+                                samples.get(event.sampleId).play();
+                                rootLayout.findViewById(event.sampleId).setPressed(true);
+                                rootLayout.findViewById(event.sampleId).setActivated(false);
+                                launchQueue.remove(event);
+                            }
+
+                        }
                     }
                 });
                 if (isRecording)
@@ -2192,23 +2394,27 @@ public class LaunchPadActivity extends AppCompatActivity {
         loopingSamplesPlaying = new ArrayList<LaunchEvent>(5);
         updateCounterMessage();
     }
+    private double beatsPerSec, sec, beats;
     private void updateCounterMessage(){
-        double beatsPerSec = (double)bpm / 60;
-        double sec = (double)counter / 1000;
-        double beats = sec * beatsPerSec;
+        beatsPerSec = (double)bpm / 60;
+        sec = (double)counter / 1000;
+        beats = sec * beatsPerSec;
         int bars = (int)Math.floor(beats / timeSignature);
         // Subtract one from beats so that counter displays zero when zero
         if (beats == 0)
             beats = -1;
-        counterTextView.setText(String.format(Locale.US, "%d BPM  %2d : %.2f", bpm, bars, beats % timeSignature + 1));
+        counterTextView.setText(String.format(Locale.US, "%2d : %.2f", bars, beats % timeSignature + 1));
     }
     private void stopPlayBack(){
         isPlaying = false;
-        loopingSamplesPlaying = new ArrayList<LaunchEvent>(5);
+        MenuItem playButton = actionBarMenu.findItem(R.id.action_play);
+        playButton.setIcon(R.drawable.ic_action_av_play_arrow);
+        loopingSamplesPlaying = new ArrayList<>(5);
         for (Integer i : activePads) {
             Sample s = samples.get(i);
             View v = findViewById(i);
             v.setPressed(false);
+            v.setActivated(false);
             if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
                 if (isRecording)
                     launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, i));
@@ -2221,10 +2427,8 @@ public class LaunchPadActivity extends AppCompatActivity {
                 s.stop();
             }
         }
-        /*
-        View v = findViewById(R.id.button_play);
-        v.setBackgroundResource(R.drawable.button_play);
-        */
+
+
         reconnectTouchListeners();
         isRecording = false;
     }
@@ -2747,6 +2951,11 @@ public class LaunchPadActivity extends AppCompatActivity {
         public static final int ERROR_NONE = 9000;
         public static final int ERROR_OUT_OF_MEMORY = 9001;
         public static final int ERROR_FILE_IO = 9002;
+        public static final int Q_NONE = 0;
+        public static final int Q_BAR = 5;
+        public static final int Q_BEAT = 1;
+        public static final int Q_HALF_BEAT = 2;
+        public static final int Q_QUART_BEAT = 4;
 
         // Private fields
         private int id;
@@ -2754,6 +2963,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         private boolean loop = false;
         private int loopMode = 0;
         private int launchMode = LAUNCHMODE_TRIGGER;
+        private int quantizationMode = Q_NONE;
         private File sampleFile;
         private int sampleByteLength;
         private int sampleRate = 44100;
@@ -2838,6 +3048,15 @@ public class LaunchPadActivity extends AppCompatActivity {
         }
         public int getLaunchMode(){
             return launchMode;
+        }
+        public void setQuantizationMode(int mode){
+            quantizationMode = mode;
+        }
+        public int getQuantizationMode(){
+            return quantizationMode;
+        }
+        public boolean isQuantized(){
+            return quantizationMode > 0;
         }
         public double getSampleLengthMillis(){
             return  1000 * (double)sampleByteLength / (sampleRate * 16 / 4);

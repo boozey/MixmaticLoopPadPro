@@ -7,7 +7,7 @@ android {
         applicationId 'com.nakedape.mixmaticlooppad'
         minSdkVersion 16
         targetSdkVersion 25
-        versionCode 36
+        versionCode 37
         versionName '1.5'
     }
     buildTypes {
