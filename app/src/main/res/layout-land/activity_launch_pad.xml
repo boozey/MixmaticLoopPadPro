@@ -605,4 +605,26 @@
         android:clickable="true"
         android:onClick="DoneButtonClick"
         android:translationY="48dp"/>
+    <LinearLayout android:id="@+id/volume_popup"
+        android:layout_width="150dp"
+        android:layout_height="wrap_content"
+        android:padding="4dp"
+        android:background="@color/primary"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_toRightOf="@id/pad_toolbar"
+        android:layout_toEndOf="@id/pad_toolbar"
+        android:visibility="gone">
+        <SeekBar android:id="@+id/volume_slider_view"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:progress="50"
+            android:max="100"/>
+        <TextView android:id="@+id/volume_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_primary_light"
+            android:text="50"/>
+    </LinearLayout>
 </RelativeLayout>

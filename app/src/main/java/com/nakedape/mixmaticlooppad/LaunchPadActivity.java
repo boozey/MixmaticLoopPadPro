@@ -86,6 +86,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Random;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javazoom.jl.converter.WaveFile;
 
@@ -2074,6 +2076,9 @@ public class LaunchPadActivity extends AppCompatActivity {
 
     /** Recording and playback **/
     private ArrayList<LaunchEvent> launchQueue;
+    private double beatsPerSec, sec, beats;
+    private Timer timeOutTimer;
+
     // Handles touch events in record mode;
     private View.OnTouchListener TouchPadTouchListener = new View.OnTouchListener() {
         @Override
@@ -2089,6 +2094,28 @@ public class LaunchPadActivity extends AppCompatActivity {
                 counter = recordingEndTime;
                 actionBarMenu.findItem(R.id.action_play).setIcon(R.drawable.ic_action_av_pause);
                 new Thread(new CounterThread()).start();
+            }
+            if (timeOutTimer == null) {
+                timeOutTimer = new Timer();
+                timeOutTimer.scheduleAtFixedRate(new TimerTask() {
+                    @Override
+                    public void run() {
+                        boolean isTouched = false;
+                        for (int i : activePads) {
+                            isTouched = isTouched || samples.get(i).audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
+                        }
+                        if (!isTouched) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    stopPlayBack();
+                                    timeOutTimer.cancel();
+                                    timeOutTimer = null;
+                                }
+                            });
+                        }
+                    }
+                }, 5000, 5000);
             }
             Sample s = samples.get(v.getId());
             switch (event.getAction()) {
@@ -2394,7 +2421,6 @@ public class LaunchPadActivity extends AppCompatActivity {
         loopingSamplesPlaying = new ArrayList<LaunchEvent>(5);
         updateCounterMessage();
     }
-    private double beatsPerSec, sec, beats;
     private void updateCounterMessage(){
         beatsPerSec = (double)bpm / 60;
         sec = (double)counter / 1000;
