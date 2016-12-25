@@ -97,17 +97,13 @@ public class LaunchPadActivity extends AppCompatActivity {
     private static final String LOG_TAG = "LaunchPadActivity";
 
     public static String TOUCHPAD_ID = "com.nakedape.mixmaticlooppad.touchpadid";
-    public static String TOUCHPAD_ID_ARRAY = "com.nakedape.mixmaticlooppad.touchpadidarray";
     public static String SAMPLE_PATH = "com.nakedape.mixmaticlooppad.samplepath";
     public static String COLOR = "com.nakedape.mixmaticlooppad.color";
     public static String LOOPMODE = "com.nakedape.mixmaticlooppad.loop";
     public static String LAUNCHMODE = "com.nakedape.mixmaticlooppad.launchmode";
-    public static String NUM_SLICES = "com.nakedape.mixmaticlooppad.numslices";
-    public static String SLICE_PATHS = "com.nakedape.mixmaticlooppad.slicepaths";
     public static String SAMPLE_VOLUME = "com.nakedape.mixmaticlooppad.volume";
     public static String QUANTIZE_MODE = "com.nakedape.mixmaticlooppad.quantize_mode";
     private static int GET_SAMPLE = 0;
-    private static int GET_SLICES = 1;
 
     private boolean isEditMode = false;
     private boolean isRecording = false;
@@ -155,7 +151,6 @@ public class LaunchPadActivity extends AppCompatActivity {
     private ProgressDialog progressDialog;
     private SparseArray<Sample> samples;
     private File homeDirectory, sampleDirectory, samplePackDirectory;
-    private int numTouchPads;
     private AudioManager am;
     private SharedPreferences launchPadprefs; // Stores setting for each launchpad
     private SharedPreferences activityPrefs; // Stores app wide preferences
@@ -163,13 +158,10 @@ public class LaunchPadActivity extends AppCompatActivity {
     private View listItemPauseButton;
 
     private int selectedSampleID;
-    private boolean multiSelect = false;
-    private ArrayList<String> selections = new ArrayList<String>();
     private int[] touchPadIds = {R.id.touchPad1, R.id.touchPad2, R.id.touchPad3, R.id.touchPad4, R.id.touchPad5, R.id.touchPad6,
             R.id.touchPad7, R.id.touchPad8, R.id.touchPad9, R.id.touchPad10, R.id.touchPad11, R.id.touchPad12,
             R.id.touchPad13, R.id.touchPad14, R.id.touchPad15, R.id.touchPad16, R.id.touchPad17, R.id.touchPad18,
             R.id.touchPad19, R.id.touchPad20, R.id.touchPad21, R.id.touchPad22, R.id.touchPad23, R.id.touchPad24};
-    private ActionMode launchPadActionMode;
     private Menu actionBarMenu;
     private boolean isSampleLibraryShowing = false;
     private SampleListAdapter sampleListAdapter;
@@ -696,7 +688,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         }
     }
 
-    // Methods for managing touch pads
+    // Touch pad helper methods
     private void preparePad(String path, int id, int color) {
         File f = new File(path); // File to contain the new sample
         // Create a new file to contain the new sample
@@ -783,8 +775,6 @@ public class LaunchPadActivity extends AppCompatActivity {
         editor.remove(padNumber + COLOR);
         editor.apply();
         updatePadOverlay();
-        //Toast.makeText(context, "Sample removed", Toast.LENGTH_SHORT).show();
-        launchPadActionMode = null;
     }
     private void notifySampleLoadError(Sample s){
         String error = getString(R.string.error_sample_load) + " " + new File(s.getPath()).getName();
@@ -799,49 +789,6 @@ public class LaunchPadActivity extends AppCompatActivity {
                 Toast.makeText(context, message, Toast.LENGTH_LONG).show();
             }
         });
-    }
-    private void recordSample(){
-        final File micAudioFile = new File(getExternalCacheDir(), "mic_audio_recording.wav");
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        LayoutInflater inflater = getLayoutInflater();
-        final View view = inflater.inflate(R.layout.audio_record_dialog, null);
-        final ImageButton recButton = (ImageButton)view.findViewById(R.id.recordButton);
-        recButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (!recButton.isSelected()) {
-                    recButton.setSelected(true);
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            recordAudio(micAudioFile);
-                        }
-                    }).start();
-                } else {
-                    isMicRecording = false;
-                    recButton.setSelected(false);
-                }
-            }
-        });
-        builder.setView(view);
-        builder.setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                isMicRecording = false;
-                preparePad(micAudioFile.getAbsolutePath(), selectedSampleID, 0);
-                micAudioFile.delete();
-            }
-        });
-        builder.setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                isMicRecording = false;
-                micAudioFile.delete();
-                dialog.cancel();
-            }
-        });
-        AlertDialog dialog = builder.create();
-        dialog.show();
     }
     private void recordAudio(File recordingFile){
         int bufferSize = AudioRecord.getMinBufferSize(44100, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT);
@@ -1441,94 +1388,6 @@ public class LaunchPadActivity extends AppCompatActivity {
     }
 
     // Sample Library Methods
-    public void SampleLibTabClick(View v){
-        if (isSampleLibraryShowing) {
-            hideSampleLibrary();
-        }
-        else if (!(isPlaying || isRecording)) showSampleLibrary();
-        else {
-            isRecording = false;
-            boolean isTouched = false;
-            for (int i : activePads){
-                isTouched = isTouched || samples.get(i).audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
-            }
-            if (!isTouched) showSampleLibrary();
-        }
-    }
-    private void showSampleLibrary(){
-        if (!isSampleLibraryShowing) {
-            if (!isEditMode) gotoEditMode();
-            final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
-            ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
-
-            if (sampleListAdapter.getCount() < 1 && samplePackListAdapter.getCount() < 2) SamplePacksClick(null);
-
-            // Start the animation
-            AnimatorSet set = new AnimatorSet();
-            ObjectAnimator slideLeft = ObjectAnimator.ofFloat(library, "TranslationX", sampleListView.getWidth(), 0);
-            set.setInterpolator(new AccelerateDecelerateInterpolator());
-            set.play(slideLeft);
-            set.setTarget(library);
-            set.addListener(new Animator.AnimatorListener() {
-                @Override
-                public void onAnimationStart(Animator animation) {
-
-                }
-
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    isSampleLibraryShowing = true;
-                }
-
-                @Override
-                public void onAnimationCancel(Animator animation) {
-
-                }
-
-                @Override
-                public void onAnimationRepeat(Animator animation) {
-
-                }
-            });
-            set.start();
-        }
-    }
-    private void hideSampleLibrary(){
-        if (isSampleLibraryShowing) {
-            LinearLayout library = (LinearLayout) findViewById(R.id.sample_library);
-            ListView sampleListView = (ListView) library.findViewById(R.id.sample_listview);
-            sampleLibraryIndex = -1;
-
-            // Start the animation
-            AnimatorSet set = new AnimatorSet();
-            ObjectAnimator slideRight = ObjectAnimator.ofFloat(library, "TranslationX", 0, sampleListView.getWidth());
-            set.setInterpolator(new AccelerateDecelerateInterpolator());
-            set.play(slideRight);
-            set.setTarget(library);
-            set.addListener(new Animator.AnimatorListener() {
-                @Override
-                public void onAnimationStart(Animator animation) {
-
-                }
-
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    isSampleLibraryShowing = false;
-                }
-
-                @Override
-                public void onAnimationCancel(Animator animation) {
-
-                }
-
-                @Override
-                public void onAnimationRepeat(Animator animation) {
-
-                }
-            });
-            set.start();
-        }
-    }
     private class SampleListAdapter extends BaseAdapter {
         public ArrayList<File> sampleFiles;
         public ArrayList<String> sampleLengths;
@@ -1644,127 +1503,6 @@ public class LaunchPadActivity extends AppCompatActivity {
             });
             return  convertView;
         }
-    }
-    protected class LibraryDragEventListener implements View.OnDragListener {
-        public boolean onDrag(View v, DragEvent event) {
-            switch (event.getAction()) {
-                case DragEvent.ACTION_DRAG_STARTED:
-                    return true;
-                case DragEvent.ACTION_DRAG_ENTERED:
-                    showSampleLibrary();
-                    return true;
-                case DragEvent.ACTION_DRAG_LOCATION:
-                    return true;
-                case DragEvent.ACTION_DRAG_EXITED:
-                    hideSampleLibrary();
-                    return true;
-                case DragEvent.ACTION_DROP:
-                    ClipData data = event.getClipData();
-                    if (data.getDescription().getLabel().equals(TOUCHPAD_ID)) {
-                        int padId = Integer.parseInt((String) data.getItemAt(0).getText());
-                        removeSample(padId);
-                        resetRecording();
-                    }
-                    return true;
-                default:
-                    return false;
-            }
-        }
-    }
-    public void AddSampleClick(View v){
-            editSample();
-    }
-    private void editSample(){
-        Intent intent = new Intent(Intent.ACTION_SEND, null, this, SampleEditActivity.class);
-        if (isEditMode) {
-            intent.putExtra(TOUCHPAD_ID, selectedSampleID);
-            if (samples.indexOfKey(selectedSampleID) >= 0) {
-                intent.putExtra(SAMPLE_PATH, samples.get(selectedSampleID).getPath());
-                String padNumber = (String) findViewById(selectedSampleID).getTag();
-                intent.putExtra(COLOR, launchPadprefs.getInt(padNumber + COLOR, 0));
-            }
-        }
-        startActivityForResult(intent, GET_SAMPLE);
-    }
-    public void DeleteSampleClick(View v){
-        // Determine if a sample is selected
-        File file = null;
-        if (sampleLibraryIndex > -1) {
-            file = sampleListAdapter.getItem(sampleLibraryIndex);
-        } else if (selectedSampleID > -1) {
-            if (activePads.contains((Integer)selectedSampleID))
-                file = new File(samples.get(selectedSampleID).getPath());
-        }
-
-        if (file != null) {
-            final File sampleFile = file;
-            // Determine what touchpads this sample is assigned to
-            final ArrayList<Integer> padIds = new ArrayList<>();
-            for (int i : activePads) {
-                String path = samples.get(i).getPath();
-                if (path.equals(sampleFile.getAbsolutePath()))
-                    padIds.add(i);
-            }
-
-            // Show dialog to alert user that file will be permanently deleted
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            builder.setTitle(R.string.remove_sample_dialog_title);
-            if (padIds.size() > 0)
-                builder.setMessage(R.string.remove_samples_in_use_dialog_message);
-            else
-                builder.setMessage(R.string.remove_sample_dialog_message);
-            builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    for (int i : padIds)
-                        removeSample(i);
-                    if (sampleFile.delete())
-                        Toast.makeText(context, getString(R.string.sample_deleted_toast), Toast.LENGTH_SHORT).show();
-                    else
-                        Toast.makeText(context, getString(R.string.sample_delete_error_toast), Toast.LENGTH_SHORT).show();
-                    if (sampleListAdapter != null)
-                        sampleListAdapter.remove(sampleFile);
-                }
-            });
-            builder.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-
-                }
-            });
-            AlertDialog dialog = builder.create();
-            dialog.show();
-        } else {
-            Toast.makeText(context, getString(R.string.no_sample_selected_toast), Toast.LENGTH_SHORT).show();
-        }
-    }
-    public void MySamplesClick(View v){
-        TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
-        mySamplesTextView.setText(R.string.my_samples_underlined);
-
-        TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
-        samplePacksTextView.setText(R.string.sample_packs);
-
-        rootLayout.findViewById(R.id.sample_listview).setVisibility(View.VISIBLE);
-        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
-        rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
-        rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
-        rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
-        Animations.fadeIn(rootLayout.findViewById(R.id.sample_listview), 200, 0).start();
-    }
-    public void SamplePacksClick(View v){
-        TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
-        mySamplesTextView.setText(R.string.my_samples);
-
-        TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
-        samplePacksTextView.setText(R.string.sample_packs_underlined);
-
-        rootLayout.findViewById(R.id.sample_listview).setVisibility(View.GONE);
-        rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
-        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
-        rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
-        rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.VISIBLE);
-        Animations.fadeIn(findViewById(R.id.sample_pack_listview), 200, 0).start();
     }
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
@@ -1885,19 +1623,6 @@ public class LaunchPadActivity extends AppCompatActivity {
 
             return  convertView;
         }
-    }
-    private void showSamplePackFiles(String name, AnimatorSet anim){
-        ExpandableListView packListView = (ExpandableListView)rootLayout.findViewById(R.id.sample_pack_files_listview);
-        SamplePackFilesListAdapter filesListAdapter = new SamplePackFilesListAdapter(context, R.layout.sample_pack_folder_list_item, R.layout.sample_pack_file_list_item);
-        packListView.setAdapter(filesListAdapter);
-        filesListAdapter.loadPack(name);
-
-        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
-        packListView.setVisibility(View.VISIBLE);
-        AnimatorSet fadeIn = Animations.fadeIn(packListView, 200, (int)anim.getDuration());
-        AnimatorSet set = new AnimatorSet();
-        set.playTogether(anim, fadeIn);
-        set.start();
     }
     private class SamplePackFilesListAdapter extends BaseExpandableListAdapter {
         private LayoutInflater mInflater;
@@ -2082,8 +1807,231 @@ public class LaunchPadActivity extends AppCompatActivity {
             return convertView;
         }
     }
+    protected class LibraryDragEventListener implements View.OnDragListener {
+        public boolean onDrag(View v, DragEvent event) {
+            switch (event.getAction()) {
+                case DragEvent.ACTION_DRAG_STARTED:
+                    return true;
+                case DragEvent.ACTION_DRAG_ENTERED:
+                    showSampleLibrary();
+                    return true;
+                case DragEvent.ACTION_DRAG_LOCATION:
+                    return true;
+                case DragEvent.ACTION_DRAG_EXITED:
+                    hideSampleLibrary();
+                    return true;
+                case DragEvent.ACTION_DROP:
+                    ClipData data = event.getClipData();
+                    if (data.getDescription().getLabel().equals(TOUCHPAD_ID)) {
+                        int padId = Integer.parseInt((String) data.getItemAt(0).getText());
+                        removeSample(padId);
+                        resetRecording();
+                    }
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+    public void SampleLibTabClick(View v){
+        if (isSampleLibraryShowing) {
+            hideSampleLibrary();
+        }
+        else if (!(isPlaying || isRecording)) showSampleLibrary();
+        else {
+            isRecording = false;
+            boolean isTouched = false;
+            for (int i : activePads){
+                isTouched = isTouched || samples.get(i).audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
+            }
+            if (!isTouched) showSampleLibrary();
+        }
+    }
+    private void showSampleLibrary(){
+        if (!isSampleLibraryShowing) {
+            if (!isEditMode) gotoEditMode();
+            final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
+            ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
+
+            if (sampleListAdapter.getCount() < 1 && samplePackListAdapter.getCount() < 2) SamplePacksClick(null);
+
+            // Start the animation
+            AnimatorSet set = new AnimatorSet();
+            ObjectAnimator slideLeft = ObjectAnimator.ofFloat(library, "TranslationX", sampleListView.getWidth(), 0);
+            set.setInterpolator(new AccelerateDecelerateInterpolator());
+            set.play(slideLeft);
+            set.setTarget(library);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    isSampleLibraryShowing = true;
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void hideSampleLibrary(){
+        if (isSampleLibraryShowing) {
+            LinearLayout library = (LinearLayout) findViewById(R.id.sample_library);
+            ListView sampleListView = (ListView) library.findViewById(R.id.sample_listview);
+            sampleLibraryIndex = -1;
+
+            // Start the animation
+            AnimatorSet set = new AnimatorSet();
+            ObjectAnimator slideRight = ObjectAnimator.ofFloat(library, "TranslationX", 0, sampleListView.getWidth());
+            set.setInterpolator(new AccelerateDecelerateInterpolator());
+            set.play(slideRight);
+            set.setTarget(library);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    isSampleLibraryShowing = false;
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    public void AddSampleClick(View v){
+            editSample();
+    }
+    private void editSample(){
+        Intent intent = new Intent(Intent.ACTION_SEND, null, this, SampleEditActivity.class);
+        if (isEditMode) {
+            intent.putExtra(TOUCHPAD_ID, selectedSampleID);
+            if (samples.indexOfKey(selectedSampleID) >= 0) {
+                intent.putExtra(SAMPLE_PATH, samples.get(selectedSampleID).getPath());
+                String padNumber = (String) findViewById(selectedSampleID).getTag();
+                intent.putExtra(COLOR, launchPadprefs.getInt(padNumber + COLOR, 0));
+            }
+        }
+        startActivityForResult(intent, GET_SAMPLE);
+    }
+    public void DeleteSampleClick(View v){
+        // Determine if a sample is selected
+        File file = null;
+        if (sampleLibraryIndex > -1) {
+            file = sampleListAdapter.getItem(sampleLibraryIndex);
+        } else if (selectedSampleID > -1) {
+            if (activePads.contains((Integer)selectedSampleID))
+                file = new File(samples.get(selectedSampleID).getPath());
+        }
+
+        if (file != null) {
+            final File sampleFile = file;
+            // Determine what touchpads this sample is assigned to
+            final ArrayList<Integer> padIds = new ArrayList<>();
+            for (int i : activePads) {
+                String path = samples.get(i).getPath();
+                if (path.equals(sampleFile.getAbsolutePath()))
+                    padIds.add(i);
+            }
+
+            // Show dialog to alert user that file will be permanently deleted
+            AlertDialog.Builder builder = new AlertDialog.Builder(context);
+            builder.setTitle(R.string.remove_sample_dialog_title);
+            if (padIds.size() > 0)
+                builder.setMessage(R.string.remove_samples_in_use_dialog_message);
+            else
+                builder.setMessage(R.string.remove_sample_dialog_message);
+            builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    for (int i : padIds)
+                        removeSample(i);
+                    if (sampleFile.delete())
+                        Toast.makeText(context, getString(R.string.sample_deleted_toast), Toast.LENGTH_SHORT).show();
+                    else
+                        Toast.makeText(context, getString(R.string.sample_delete_error_toast), Toast.LENGTH_SHORT).show();
+                    if (sampleListAdapter != null)
+                        sampleListAdapter.remove(sampleFile);
+                }
+            });
+            builder.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+
+                }
+            });
+            AlertDialog dialog = builder.create();
+            dialog.show();
+        } else {
+            Toast.makeText(context, getString(R.string.no_sample_selected_toast), Toast.LENGTH_SHORT).show();
+        }
+    }
+    public void MySamplesClick(View v){
+        TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
+        mySamplesTextView.setText(R.string.my_samples_underlined);
+
+        TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
+        samplePacksTextView.setText(R.string.sample_packs);
+
+        rootLayout.findViewById(R.id.sample_listview).setVisibility(View.VISIBLE);
+        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
+        Animations.fadeIn(rootLayout.findViewById(R.id.sample_listview), 200, 0).start();
+    }
+    public void SamplePacksClick(View v){
+        TextView mySamplesTextView = (TextView)findViewById(R.id.my_samples_button);
+        mySamplesTextView.setText(R.string.my_samples);
+
+        TextView samplePacksTextView = (TextView)findViewById(R.id.sample_packs_button);
+        samplePacksTextView.setText(R.string.sample_packs_underlined);
+
+        rootLayout.findViewById(R.id.sample_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
+        rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.VISIBLE);
+        Animations.fadeIn(findViewById(R.id.sample_pack_listview), 200, 0).start();
+    }
+    private void showSamplePackFiles(String name, AnimatorSet anim){
+        ExpandableListView packListView = (ExpandableListView)rootLayout.findViewById(R.id.sample_pack_files_listview);
+        SamplePackFilesListAdapter filesListAdapter = new SamplePackFilesListAdapter(context, R.layout.sample_pack_folder_list_item, R.layout.sample_pack_file_list_item);
+        packListView.setAdapter(filesListAdapter);
+        filesListAdapter.loadPack(name);
+
+        rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.GONE);
+        packListView.setVisibility(View.VISIBLE);
+        AnimatorSet fadeIn = Animations.fadeIn(packListView, 200, (int)anim.getDuration());
+        AnimatorSet set = new AnimatorSet();
+        set.playTogether(anim, fadeIn);
+        set.start();
+    }
 
 
+    /** Monetization **/
     // In-app Store
     public static final int STORE_RESULT = 1001;
     public void OpenStore(View v){
