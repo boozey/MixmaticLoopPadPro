@@ -1164,6 +1164,8 @@ public class LaunchPadActivity extends AppCompatActivity {
         View doneButton = rootLayout.findViewById(R.id.done_button);
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
         // Start the animation
+        rootLayout.findViewById(R.id.volume_popup).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.color_popup).setVisibility(View.GONE);
         AnimatorSet set = new AnimatorSet();
         ObjectAnimator slideLeft = ObjectAnimator.ofFloat(toolBar, "TranslationX", 0, -toolBar.getWidth());
         slideLeft.setTarget(toolBar);
@@ -1172,8 +1174,6 @@ public class LaunchPadActivity extends AppCompatActivity {
         AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
         set.setInterpolator(new AccelerateDecelerateInterpolator());
         set.playTogether(slideLeft, slideUp, fadeOut);
-        if (rootLayout.findViewById(R.id.volume_popup).getVisibility() != View.GONE)
-            rootLayout.findViewById(R.id.volume_popup).setVisibility(View.GONE);
         // Show add after animation
         set.addListener(new Animator.AnimatorListener() {
             @Override
@@ -1243,26 +1243,13 @@ public class LaunchPadActivity extends AppCompatActivity {
                 }
                 return;
             case R.id.action_pick_color:
-                android.support.v7.app.AlertDialog.Builder builder = new android.support.v7.app.AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
-                builder.setTitle(R.string.color_dialog_title);
-                builder.setItems(R.array.color_names, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        if (samples.indexOfKey(selectedSampleID) >= 0){
-                            View v = findViewById(selectedSampleID);// Load shared preferences to save color
-                            String padNumber = (String)v.getTag();
-                            v.setBackgroundResource(padColorDrawables[which]);
-                            SharedPreferences.Editor editor = launchPadprefs.edit();
-                            editor.putInt(padNumber + COLOR, which);
-                            editor.apply();
-                        }
-                    }
-                });
-                AppCompatDialog dialog = builder.create();
-                dialog.show();
+                if (rootLayout.findViewById(R.id.color_popup).getVisibility() != View.VISIBLE && samples.indexOfKey(selectedSampleID) >= 0)
+                    showColorPopup();
+                else
+                    hideColorPopup();
                 return;
             case R.id.action_set_volume:
-                if (rootLayout.findViewById(R.id.volume_popup).getVisibility() != View.VISIBLE)
+                if (rootLayout.findViewById(R.id.volume_popup).getVisibility() != View.VISIBLE && samples.indexOfKey(selectedSampleID) >= 0)
                     showVolumePopup();
                 else
                     hideVolumePopup();
@@ -1304,6 +1291,7 @@ public class LaunchPadActivity extends AppCompatActivity {
     private void showVolumePopup(){
         final View popup = rootLayout.findViewById(R.id.volume_popup);
         if (popup.getVisibility() != View.VISIBLE) {
+            hideColorPopup();
             RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) popup.getLayoutParams();
             params.topMargin = rootLayout.findViewById(R.id.pad_toolbar).getTop() + rootLayout.findViewById(R.id.action_set_volume).getTop();
             popup.setLayoutParams(params);
@@ -1355,6 +1343,75 @@ public class LaunchPadActivity extends AppCompatActivity {
     }
     private void hideVolumePopup(){
         final View popup = rootLayout.findViewById(R.id.volume_popup);
+        if (popup.getVisibility() != View.GONE) {
+            // Start the animation
+            AnimatorSet set = Animations.fadeOut(popup, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    popup.setVisibility(View.GONE);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void showColorPopup(){
+        final View popup = rootLayout.findViewById(R.id.color_popup);
+        if (popup.getVisibility() != View.VISIBLE) {
+            hideVolumePopup();
+            RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) popup.getLayoutParams();
+            params.topMargin = rootLayout.findViewById(R.id.pad_toolbar).getTop() + rootLayout.findViewById(R.id.action_pick_color).getTop();
+            popup.setLayoutParams(params);
+
+            // Start the animation
+            popup.setVisibility(View.VISIBLE);
+            popup.setAlpha(0f);
+            AnimatorSet set = Animations.fadeIn(popup, 200, 0);
+            set.start();
+        }
+    }
+    public void ColorClick(View v){
+        TouchPad pad = (TouchPad)rootLayout.findViewById(selectedSampleID);
+        String padNumber = (String)pad.getTag();
+        SharedPreferences.Editor editor = launchPadprefs.edit();
+        switch (v.getId()){
+            case R.id.blue:
+                pad.setBackgroundResource(R.drawable.launch_pad_blue);
+                editor.putInt(padNumber + COLOR, 0);
+                break;
+            case R.id.red:
+                pad.setBackgroundResource(R.drawable.launch_pad_red);
+                editor.putInt(padNumber + COLOR, 1);
+                break;
+            case R.id.green:
+                pad.setBackgroundResource(R.drawable.launch_pad_green);
+                editor.putInt(padNumber + COLOR, 2);
+                break;
+            case R.id.orange:
+                pad.setBackgroundResource(R.drawable.launch_pad_orange);
+                editor.putInt(padNumber + COLOR, 3);
+                break;
+        }
+        editor.apply();
+        hideColorPopup();
+    }
+    private void hideColorPopup(){
+        final View popup = rootLayout.findViewById(R.id.color_popup);
         if (popup.getVisibility() != View.GONE) {
             // Start the animation
             AnimatorSet set = Animations.fadeOut(popup, 200, 0);
