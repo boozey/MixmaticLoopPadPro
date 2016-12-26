@@ -3,10 +3,11 @@
 
     <string name="app_name" translatable="false">Mixmatic Loop Pad</string>
 
-    <!-- Admob ad unit id strings-->
+    <!-- Advertising strings-->
     <string name="admob_id" translatable="false">ca-app-pub-4640479150069852~9455449521</string>
     <string name="launch_pad_activity_interstitial_ad_id" translatable="false">ca-app-pub-4640479150069852/9227646327</string>
     <string name="sample_edit_banner_ad_id" translatable="false">ca-app-pub-4640479150069852/3320713529</string>
+    <string name="stop_ads_prompt">Would you like to stop seeing ads?</string>
 
     <!-- Facebook app id-->
     <string name="facebook_application_id" translatable="false">753482518050805</string>
@@ -57,6 +58,7 @@
 
     <!-- Store Strings -->
     <string name="buy">Buy</string>
+    <string name="owned">Owned</string>
     <string name="download">Download</string>
     <string name="purchasing">Completing purchase</string>
     <string name="downloading">Downloading&#8230; %1$d %% </string>

@@ -28,6 +28,7 @@ import android.media.MediaRecorder;
 import android.os.*;
 import android.os.Process;
 import android.preference.PreferenceManager;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatDialog;
@@ -49,6 +50,7 @@ import android.view.animation.AnticipateOvershootInterpolator;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.BaseExpandableListAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ExpandableListView;
 import android.widget.ImageButton;
@@ -89,6 +91,10 @@ import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import IABUtils.IabHelper;
+import IABUtils.IabResult;
+import IABUtils.Inventory;
+import IABUtils.Purchase;
 import javazoom.jl.converter.WaveFile;
 
 
@@ -124,27 +130,6 @@ public class LaunchPadActivity extends AppCompatActivity {
     private int playEventIndex = 0;
     private ArrayList<LaunchEvent> loopingSamplesPlaying = new ArrayList<LaunchEvent>(5);
     private ArrayList<Integer> activePads;
-
-    // Listener to turn off touch pads when sound is finished
-    private AudioTrack.OnPlaybackPositionUpdateListener samplePlayListener = new AudioTrack.OnPlaybackPositionUpdateListener() {
-        @Override
-        public void onMarkerReached(AudioTrack track) {
-            int id = track.getAudioSessionId();
-            View v = findViewById(id);
-            if (v != null) {
-                v.setPressed(false);
-                Sample s = (Sample) samples.get(id);
-                s.stop();
-                if (isRecording)
-                    launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
-            }
-        }
-
-        @Override
-        public void onPeriodicNotification(AudioTrack track) {
-
-        }
-    };
 
     private Context context;
     private RelativeLayout rootLayout;
@@ -404,6 +389,19 @@ public class LaunchPadActivity extends AppCompatActivity {
                 sampleListAdapter.addAll(sampleFiles);
             }
         }).start();
+
+        // In-app billing init
+        String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
+        mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
+        mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
+            public void onIabSetupFinished(IabResult result) {
+                if (!result.isSuccess()) {
+                    // Oh no, there was a problem.
+                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+                }
+                checkForUnconsumedPurchases();
+            }
+        });
 
         // Load UI
         runOnUiThread(new Runnable() {
@@ -2034,9 +2032,31 @@ public class LaunchPadActivity extends AppCompatActivity {
     /** Monetization **/
     // In-app Store
     public static final int STORE_RESULT = 1001;
+    private IabHelper mBillingHelper;
+    private static String RSA_STRING_1 = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjcQ7YSSmv5GSS3FrQ801508P/r5laGtv7GBG2Ax9ql6ZAJZI6UPrJIvN9gXjoRBnH",
+            RSA_STRING_2 = "OIphIg9HycJRxBwGfgcpEQ3F47uWJ/UvmPeQ3cVffFKIb/cAUqCS4puEtcDL2yDXoKjagsJNBjbRWz6tqDvzH5BtvdYoy4QUf8NqH8wd3/2R/m3PAVIr+lRlUAc1Dj2y40uOEdluDW+i9kbkMD8vrLKr+DGnB7JrKFAPaqxBNTeogv",
+            RSA_STRING_3 = "0vGNOWwJd3Tgx7VDm825Op/vyG9VQSM7W53TsyJE8NdwP8Q59B/WRlcsr+tHCyoQcjscrgVegiOyME1DfEUrQk/SPzr5AlCqa2AZ//wIDAQAB";
+    private static final String SKU_REMOVE_ADS = "remove_ads";
     public void OpenStore(View v){
         Intent intent = new Intent(context, StoreActivity.class);
         startActivityForResult(intent, STORE_RESULT);
+    }
+    private void checkForUnconsumedPurchases(){
+        try {
+            mBillingHelper.queryInventoryAsync(new IabHelper.QueryInventoryFinishedListener() {
+                @Override
+                public void onQueryInventoryFinished(IabResult result, Inventory inv) {
+                    if (!result.isSuccess()) return;
+
+                    if (inv.hasPurchase(SKU_REMOVE_ADS)){
+                        SharedPreferences.Editor editor = activityPrefs.edit();
+                        editor.putBoolean(SHOW_ADS, false);
+                        editor.apply();
+                    }
+
+                }
+            });
+        } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
     }
 
     // Admob Advertising
@@ -2056,11 +2076,22 @@ public class LaunchPadActivity extends AppCompatActivity {
         if (activityPrefs.getBoolean(SHOW_ADS, true)) {
             AdRequest adRequest = new AdRequest.Builder()
                     .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
+                    .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
                     .build();
 
             mInterstitialAd.setAdListener(new AdListener() {
                 @Override
                 public void onAdClosed() {
+                    Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), R.string.stop_ads_prompt, 5000);
+                    snackbar.setAction(R.string.yes, new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            Intent intent = new Intent(context, StoreActivity.class);
+                            intent.putExtra(StoreActivity.SHOW_APP_EXTRAS, true);
+                            startActivityForResult(intent, STORE_RESULT);
+                        }
+                    });
+                    snackbar.show();
                     requestNewInterstitial();
                 }
             });
@@ -2094,9 +2125,10 @@ public class LaunchPadActivity extends AppCompatActivity {
     private boolean handlePlayTouch(View v, MotionEvent event){
         if (!isEditMode && !isPlaying && samples.indexOfKey(v.getId()) >= 0) {
             if (!isRecording){ // Start counter thread
+                resetRecording();
                 isRecording = true;
                 launchQueue = new ArrayList<>(10);
-                counter = recordingEndTime;
+                //counter = recordingEndTime;
                 actionBarMenu.findItem(R.id.action_play).setIcon(R.drawable.ic_action_av_pause);
                 new Thread(new CounterThread()).start();
             }
@@ -2140,9 +2172,12 @@ public class LaunchPadActivity extends AppCompatActivity {
                     }
                     // If the sound is already playing, stop it
                     if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                        stopSample(s, v);
+                        /*
                         s.stop();
                         v.setPressed(false);
                         launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
+                        */
                         return true;
                     }
                     // Otherwise launch the sample
@@ -2158,36 +2193,82 @@ public class LaunchPadActivity extends AppCompatActivity {
         if (s.hasPlayed())
             s.reset();
         LaunchEvent launchEvent;
-        switch (s.getQuantizationMode()){
-            case Sample.Q_BAR:
-                launchEvent = new LaunchEvent((Math.floor(beats) + timeSignature - Math.floor(beats) % timeSignature) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
-                launchEvents.add(launchEvent);
-                launchQueue.add(launchEvent);
-                v.setActivated(true);
-                break;
-            case Sample.Q_BEAT:
-                launchEvent = new LaunchEvent((Math.floor(beats) + 1) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
-                launchEvents.add(launchEvent);
-                launchQueue.add(launchEvent);
-                v.setActivated(true);
-                break;
-            case Sample.Q_HALF_BEAT:
-                launchEvent = new LaunchEvent((Math.floor(beats) + 0.5) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
-                launchEvents.add(launchEvent);
-                launchQueue.add(launchEvent);
-                v.setActivated(true);
-                break;
-            case Sample.Q_QUART_BEAT:
-                launchEvent = new LaunchEvent((Math.floor(beats) + 0.25) * 1000 / beatsPerSec , LaunchEvent.PLAY_START, v.getId());
-                launchEvents.add(launchEvent);
-                launchQueue.add(launchEvent);
-                v.setActivated(true);
-                break;
-            case Sample.Q_NONE:
-                s.play();
-                v.setPressed(true);
-                launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_START, v.getId()));
-                break;
+        if (s.getLaunchMode() == Sample.LAUNCHMODE_GATE){
+            s.play();
+            v.setPressed(true);
+            launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_START, v.getId()));
+        } else {
+            switch (s.getQuantizationMode()) {
+                case Sample.Q_BAR:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + timeSignature - Math.floor(beats) % timeSignature) * 1000 / beatsPerSec, LaunchEvent.PLAY_START, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_BEAT:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + 1) * 1000 / beatsPerSec, LaunchEvent.PLAY_START, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_HALF_BEAT:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + 0.5) * 1000 / beatsPerSec, LaunchEvent.PLAY_START, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_QUART_BEAT:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + 0.25) * 1000 / beatsPerSec, LaunchEvent.PLAY_START, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_NONE:
+                    s.play();
+                    v.setPressed(true);
+                    launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_START, v.getId()));
+                    break;
+            }
+        }
+    }
+    private void stopSample(Sample s, View v){
+        LaunchEvent launchEvent;
+        if (s.getLaunchMode() == Sample.LAUNCHMODE_GATE){
+            s.play();
+            v.setPressed(true);
+            launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_START, v.getId()));
+        } else {
+            switch (s.getQuantizationMode()) {
+                case Sample.Q_BAR:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + timeSignature - Math.floor(beats) % timeSignature) * 1000 / beatsPerSec, LaunchEvent.PLAY_STOP, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_BEAT:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + 1) * 1000 / beatsPerSec, LaunchEvent.PLAY_STOP, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_HALF_BEAT:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + 0.5) * 1000 / beatsPerSec, LaunchEvent.PLAY_STOP, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_QUART_BEAT:
+                    launchEvent = new LaunchEvent((Math.floor(beats) + 0.25) * 1000 / beatsPerSec, LaunchEvent.PLAY_STOP, v.getId());
+                    launchEvents.add(launchEvent);
+                    launchQueue.add(launchEvent);
+                    v.setActivated(true);
+                    break;
+                case Sample.Q_NONE:
+                    s.play();
+                    v.setPressed(true);
+                    launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
+                    break;
+            }
         }
     }
     private void cancelLaunchEvent(Sample s){
@@ -2291,6 +2372,26 @@ public class LaunchPadActivity extends AppCompatActivity {
     }
 
     // Playback
+    // Listener to turn off touch pads when sound is finished
+    private AudioTrack.OnPlaybackPositionUpdateListener samplePlayListener = new AudioTrack.OnPlaybackPositionUpdateListener() {
+        @Override
+        public void onMarkerReached(AudioTrack track) {
+            int id = track.getAudioSessionId();
+            View v = findViewById(id);
+            if (v != null) {
+                v.setPressed(false);
+                Sample s = (Sample) samples.get(id);
+                s.stop();
+                if (isRecording)
+                    launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
+            }
+        }
+
+        @Override
+        public void onPeriodicNotification(AudioTrack track) {
+
+        }
+    };
     private class CounterThread implements Runnable {
         @Override
         public void run(){
@@ -2308,10 +2409,20 @@ public class LaunchPadActivity extends AppCompatActivity {
                         ArrayList<LaunchEvent> tempQueue = (ArrayList<LaunchEvent>)launchQueue.clone();
                         for (LaunchEvent event : tempQueue){
                             if (counter >= event.getTimeStamp()) {
-                                samples.get(event.sampleId).play();
-                                rootLayout.findViewById(event.sampleId).setPressed(true);
-                                rootLayout.findViewById(event.sampleId).setActivated(false);
-                                launchQueue.remove(event);
+                                switch (event.getEventType()) {
+                                    case LaunchEvent.PLAY_START:
+                                    samples.get(event.sampleId).play();
+                                    rootLayout.findViewById(event.sampleId).setPressed(true);
+                                    rootLayout.findViewById(event.sampleId).setActivated(false);
+                                    launchQueue.remove(event);
+                                        break;
+                                    case LaunchEvent.PLAY_STOP:
+                                        samples.get(event.sampleId).stop();
+                                        rootLayout.findViewById(event.sampleId).setPressed(false);
+                                        rootLayout.findViewById(event.sampleId).setActivated(false);
+                                        launchQueue.remove(event);
+                                        break;
+                                }
                             }
 
                         }
@@ -2328,9 +2439,12 @@ public class LaunchPadActivity extends AppCompatActivity {
             isRecording = false;
             isPlaying = true;
             new Thread(new CounterThread()).start();
+            /*
             for (int i = 0; i < launchEvents.size() && launchEvents.get(i).getTimeStamp() < counter; i++){
                 playEventIndex = i;
-            }
+            } */
+            playEventIndex = 0;
+            counter = 0;
             for (int i = playEventIndex; i < launchEvents.size() && isPlaying && !stopPlaybackThread; i++) {
                 ArrayList<LaunchEvent> tempArray = new ArrayList<LaunchEvent>(loopingSamplesPlaying.size());
                 tempArray.addAll(loopingSamplesPlaying);
@@ -3032,12 +3146,6 @@ public class LaunchPadActivity extends AppCompatActivity {
             this.loop = loop;
             if (loop) {
                 loopMode = -1;
-                /*if (hasPlayed()) {
-                    audioTrack.stop();
-                    audioTrack.flush();
-                    audioTrack.reloadStaticData();
-                    played = false;
-                }*/
                 if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED)
                     reloadAudioTrack();
 
@@ -3047,12 +3155,6 @@ public class LaunchPadActivity extends AppCompatActivity {
             }
             else {
                 loopMode = 0;
-                /*if (hasPlayed()) {
-                    audioTrack.stop();
-                    audioTrack.flush();
-                    audioTrack.reloadStaticData();
-                    played = false;
-                }*/
                 try {
                     audioTrack.setLoopPoints(0, 0, 0);
                 } catch (Exception e) {}
@@ -3133,7 +3235,9 @@ public class LaunchPadActivity extends AppCompatActivity {
                     audioTrack.stop();
                     audioTrack.flush();
                     audioTrack.release();
+                    //audioTrack.reloadStaticData();
                 } catch (IllegalStateException e) {
+                    reloadAudioTrack();
                 }
                 reloadAudioTrack();
             }
@@ -3176,7 +3280,7 @@ public class LaunchPadActivity extends AppCompatActivity {
             return homeDirectory.getAbsolutePath() + "/tempo_stretch_test.wav";
         }
         public void reloadAudioTrack() {
-            Log.d(LOG_TAG, "sampleByteLength = " + sampleByteLength);
+            //Log.d(LOG_TAG, "sampleByteLength = " + sampleByteLength);
             audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,
                     sampleRate,
                     AudioFormat.CHANNEL_OUT_STEREO,

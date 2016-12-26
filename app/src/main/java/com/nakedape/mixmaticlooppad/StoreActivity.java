@@ -10,6 +10,7 @@ import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.os.Bundle;
 import android.support.design.widget.BottomNavigationView;
@@ -72,6 +73,7 @@ public class StoreActivity extends AppCompatActivity {
 
     public final static String ACCOUNT_PREFS = "ACCOUNT_PREFS";
     public final static String AUTO_SIGN_IN = "AUTO_SIGN_IN";
+    public final static String SHOW_APP_EXTRAS = "SHOW_APP_EXTRAS";
     private final static String SHOW_CREATE_ACCOUNT_PROMPT = "SHOW_CREATE_ACCOUNT_PROMPT";
     private final String LOG_TAG = "StoreActivity";
 
@@ -87,6 +89,7 @@ public class StoreActivity extends AppCompatActivity {
     private RelativeLayout rootLayout;
     private File cacheFolder, samplePackFolder;
     private SamplePackListAdapter samplePackListAdapter;
+    private SharedPreferences appPrefs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +97,7 @@ public class StoreActivity extends AppCompatActivity {
         setContentView(R.layout.activity_store);
         context = this;
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
+        appPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 
         // Initialize Firebase Analytics
         firebaseAnalytics = FirebaseAnalytics.getInstance(context);
@@ -139,6 +143,10 @@ public class StoreActivity extends AppCompatActivity {
                     Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
                 }
                 // Hooray, IAB is fully set up!
+                if (getIntent().hasExtra(SHOW_APP_EXTRAS)) {
+                    hideSamplePacks();
+                    showAppExtras();
+                }
                 querySkuDetails();
             }
         });
@@ -285,7 +293,7 @@ public class StoreActivity extends AppCompatActivity {
                     firebaseAnalytics.logEvent(FirebaseAnalytics.Event.LOGIN, bundle);
 
                     if (restartPurchaseFlow) {
-                        makePurchase(user.getUid(), savedSku, savedPackName);
+                        makeSamplePackPurchase(user.getUid(), savedSku, savedPackName);
                     }
                 }
                 return;
@@ -781,10 +789,17 @@ public class StoreActivity extends AppCompatActivity {
         switch(item.getItemId()){
             case R.id.nav_sample_packs:
                 hidePurchases();
+                hideAppExtras();
                 showSamplePacks();
                 return true;
+            case R.id.nav_app_extras:
+                hidePurchases();
+                hideSamplePacks();
+                showAppExtras();
+                break;
             case R.id.nav_purchases:
                 hideSamplePacks();
+                hideAppExtras();
                 showPurchases();
                 return true;
         }
@@ -836,6 +851,67 @@ public class StoreActivity extends AppCompatActivity {
                 @Override
                 public void onAnimationEnd(Animator animator) {
                     sampleList.setVisibility(View.GONE);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void showAppExtras(){
+        // Record Firebase event
+        Bundle bundle = new Bundle();
+        bundle.putString(FirebaseAnalytics.Param.ITEM_CATEGORY, "App Extras");
+        firebaseAnalytics.logEvent(FirebaseAnalytics.Event.VIEW_ITEM_LIST, bundle);
+
+        final View appExtras = rootLayout.findViewById(R.id.app_extras_layout);
+        if (appExtras.getVisibility() != View.VISIBLE){
+            AnimatorSet set = Animations.fadeIn(appExtras, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+                    appExtras.setVisibility(View.VISIBLE);
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void hideAppExtras(){
+        final View view = rootLayout.findViewById(R.id.app_extras_layout);
+        if (view.getVisibility() != View.GONE){
+            AnimatorSet set = Animations.fadeOut(view, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    view.setVisibility(View.GONE);
                 }
 
                 @Override
@@ -1067,7 +1143,7 @@ public class StoreActivity extends AppCompatActivity {
                 if (restartPurchaseFlow){
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user != null)
-                        makePurchase(user.getUid(), savedSku, savedPackName);
+                        makeSamplePackPurchase(user.getUid(), savedSku, savedPackName);
                 }
             }
         });
@@ -1109,25 +1185,37 @@ public class StoreActivity extends AppCompatActivity {
             RSA_STRING_2 = "OIphIg9HycJRxBwGfgcpEQ3F47uWJ/UvmPeQ3cVffFKIb/cAUqCS4puEtcDL2yDXoKjagsJNBjbRWz6tqDvzH5BtvdYoy4QUf8NqH8wd3/2R/m3PAVIr+lRlUAc1Dj2y40uOEdluDW+i9kbkMD8vrLKr+DGnB7JrKFAPaqxBNTeogv",
             RSA_STRING_3 = "0vGNOWwJd3Tgx7VDm825Op/vyG9VQSM7W53TsyJE8NdwP8Q59B/WRlcsr+tHCyoQcjscrgVegiOyME1DfEUrQk/SPzr5AlCqa2AZ//wIDAQAB";
     private static int RC_PURCHASE = 1002;
-    private static String SKU_TWO_DOLLAR_PACK = "two_dollar_pack";
+    private static final String SKU_TWO_DOLLAR_PACK = "two_dollar_pack";
+    private static final String SKU_REMOVE_ADS = "remove_ads";
     private static HashMap<String, String> packPriceList;
     private String savedSku, savedPackName;
     private boolean restartPurchaseFlow = false;
 
+    // Sample pack purchases
     private void checkForUnconsumedPurchases(){
         try {
             mBillingHelper.queryInventoryAsync(new IabHelper.QueryInventoryFinishedListener() {
                 @Override
                 public void onQueryInventoryFinished(IabResult result, Inventory inv) {
-                    if (result.isSuccess() && inv.hasPurchase(SKU_TWO_DOLLAR_PACK))
-                        try {
-                            mBillingHelper.consumeAsync(inv.getPurchase(SKU_TWO_DOLLAR_PACK), new IabHelper.OnConsumeFinishedListener() {
-                                @Override
-                                public void onConsumeFinished(Purchase purchase, IabResult result) {
-                                    Log.i(LOG_TAG, "Consumed purchase on start");
-                                }
-                            });
-                        } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
+                    if (!result.isSuccess()) return;
+
+                        if (inv.hasPurchase(SKU_TWO_DOLLAR_PACK)) {
+                            try {
+                                mBillingHelper.consumeAsync(inv.getPurchase(SKU_TWO_DOLLAR_PACK), new IabHelper.OnConsumeFinishedListener() {
+                                    @Override
+                                    public void onConsumeFinished(Purchase purchase, IabResult result) {
+                                        Log.i(LOG_TAG, "Consumed purchase on start");
+                                    }
+                                });
+                            } catch (IabHelper.IabAsyncInProgressException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    if (inv.hasPurchase(SKU_REMOVE_ADS)){
+                        ((Button)rootLayout.findViewById(R.id.remove_ads_purchase_button)).setText(R.string.owned);
+                        rootLayout.findViewById(R.id.remove_ads_purchase_button).setEnabled(false);
+                    }
+
                 }
             });
         } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
@@ -1188,6 +1276,7 @@ public class StoreActivity extends AppCompatActivity {
         // Access IAB SKU details
         ArrayList<String> additionalSkuList = new ArrayList<>();
         additionalSkuList.add(SKU_TWO_DOLLAR_PACK);
+        additionalSkuList.add(SKU_REMOVE_ADS);
         try {
             mBillingHelper.queryInventoryAsync(true, additionalSkuList, null, new IabHelper.QueryInventoryFinishedListener() {
                 @Override
@@ -1200,6 +1289,11 @@ public class StoreActivity extends AppCompatActivity {
 
                     packPriceList.put(SKU_TWO_DOLLAR_PACK, inv.getSkuDetails(SKU_TWO_DOLLAR_PACK).getPrice());
                     if (samplePackListAdapter != null) samplePackListAdapter.notifyDataSetChanged();
+
+                    ((TextView)rootLayout.findViewById(R.id.remove_ads_price_view)).setText(inv.getSkuDetails(SKU_REMOVE_ADS).getPrice());
+                    ((TextView)rootLayout.findViewById(R.id.remove_ads_details_view)).setText(inv.getSkuDetails(SKU_REMOVE_ADS).getDescription());
+                    ((TextView)rootLayout.findViewById(R.id.remove_ads_title_view)).setText(inv.getSkuDetails(SKU_REMOVE_ADS).getTitle());
+                    ((ImageView)rootLayout.findViewById(R.id.remove_ads_image_view)).setImageResource(R.drawable.ic_no_ads);
 
                     checkForUnconsumedPurchases();
 
@@ -1220,10 +1314,10 @@ public class StoreActivity extends AppCompatActivity {
             showCreateAccountPrompt();
 
         } else {
-            makePurchase(user.getUid(), sku, packName);
+            makeSamplePackPurchase(user.getUid(), sku, packName);
         }
     }
-    private void makePurchase(String uid, String sku, final String packName){
+    private void makeSamplePackPurchase(String uid, String sku, final String packName){
         restartPurchaseFlow = false;
 
         try {
@@ -1303,5 +1397,38 @@ public class StoreActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    // App Extra Purchases
+    private void makePurchase(String sku){
+        try {
+            mBillingHelper.launchPurchaseFlow(this, sku, RC_PURCHASE,
+                    new IabHelper.OnIabPurchaseFinishedListener() {
+                        @Override
+                        public void onIabPurchaseFinished(IabResult result, Purchase info) {
+                            if (result.isFailure()) {
+                                Log.e(LOG_TAG, "Error purchasing: " + result);
+                                Toast.makeText(context, getString(R.string.purchase_error, result.getMessage()), Toast.LENGTH_LONG).show();
+                                return;
+                            }
+
+                            switch (info.getSku()) {
+                                case SKU_REMOVE_ADS:
+                                    SharedPreferences.Editor prefEditor = appPrefs.edit();
+                                    prefEditor.putBoolean(LaunchPadActivity.SHOW_ADS, false);
+                                    prefEditor.apply();
+                                    Log.i(LOG_TAG, "Purchase complete");
+                                    break;
+                            }
+
+                        }
+                    });
+        } catch (IabHelper.IabAsyncInProgressException e){
+            e.printStackTrace();
+        }
+    }
+    public void BuyRemoveAdsClick(View v){
+        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true))
+            makePurchase(SKU_REMOVE_ADS);
     }
 }

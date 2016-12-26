@@ -33,7 +33,73 @@
         android:layout_marginLeft="@dimen/activity_horizontal_margin"
         android:layout_marginRight="@dimen/activity_horizontal_margin"
         android:layout_height="match_parent"
-        android:layout_below="@id/my_toolbar"/>
+        android:layout_below="@id/my_toolbar"
+        android:visibility="visible"/>
+    <LinearLayout android:id="@+id/app_extras_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginLeft="@dimen/activity_horizontal_margin"
+        android:layout_marginRight="@dimen/activity_horizontal_margin"
+        android:orientation="vertical"
+        android:layout_below="@id/my_toolbar"
+        android:visibility="gone">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:background="@drawable/store_item_background">
+
+            <TextView android:id="@+id/remove_ads_title_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="8dp"
+                android:textSize="20sp"
+                android:text="Remove Advertising"/>
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <RelativeLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginRight="8dp">
+                    <ImageView android:id="@+id/remove_ads_image_view"
+                        android:layout_width="100dp"
+                        android:layout_height="100dp"
+                        android:layout_marginEnd="8dp"
+                        android:layout_marginRight="8dp"
+                        android:layout_centerInParent="true"
+                        android:visibility="visible"/>
+                </RelativeLayout>
+                    <TextView android:id="@+id/remove_ads_details_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="Permanently remove all advertising"/>
+                <LinearLayout android:orientation="vertical"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_horizontal">
+                    <TextView android:id="@+id/remove_ads_price_view"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="$0.99"/>
+                    <Button android:id="@+id/remove_ads_purchase_button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/buy"
+                        android:background="@drawable/rounded_corner_accent"
+                        android:textColor="@color/text_primary_light"
+                        android:onClick="BuyRemoveAdsClick"
+                        android:visibility="visible"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
         <ListView android:id="@+id/purchases_listview"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
