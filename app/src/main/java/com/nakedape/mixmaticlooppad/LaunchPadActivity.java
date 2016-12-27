@@ -3,6 +3,7 @@ package com.nakedape.mixmaticlooppad;
 import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.app.Activity;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
 import android.content.ClipData;
@@ -39,6 +40,7 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.DragEvent;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -337,6 +339,23 @@ public class LaunchPadActivity extends AppCompatActivity {
             }
         } else if (requestCode == STORE_RESULT){
             samplePackListAdapter.refresh();
+        }
+    }
+    @Override
+    public boolean onKeyDown(int keycode, KeyEvent e) {
+        switch (keycode) {
+            case KeyEvent.KEYCODE_BACK:
+                if (isSampleLibraryShowing){
+                    hideSampleLibrary();
+                    return true;
+                }
+                if (isEditMode){
+                    gotoPlayMode();
+                    return true;
+                }
+            default:
+                setResult(Activity.RESULT_CANCELED);
+                return super.onKeyDown(keycode, e);
         }
     }
 
@@ -1920,7 +1939,8 @@ public class LaunchPadActivity extends AppCompatActivity {
         }
     }
     public void AddSampleClick(View v){
-            editSample();
+        Intent intent = new Intent(Intent.ACTION_SEND, null, this, SampleEditActivity.class);
+        startActivityForResult(intent, GET_SAMPLE);
     }
     private void editSample(){
         Intent intent = new Intent(Intent.ACTION_SEND, null, this, SampleEditActivity.class);
@@ -1955,7 +1975,7 @@ public class LaunchPadActivity extends AppCompatActivity {
             }
 
             // Show dialog to alert user that file will be permanently deleted
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
+            AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
             builder.setTitle(R.string.remove_sample_dialog_title);
             if (padIds.size() > 0)
                 builder.setMessage(R.string.remove_samples_in_use_dialog_message);
@@ -1998,6 +2018,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         rootLayout.findViewById(R.id.sample_pack_files_listview).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.GONE);
+        rootLayout.findViewById(R.id.new_sample_button).setVisibility(View.VISIBLE);
         Animations.fadeIn(rootLayout.findViewById(R.id.sample_listview), 200, 0).start();
     }
     public void SamplePacksClick(View v){
@@ -2012,6 +2033,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         rootLayout.findViewById(R.id.sample_pack_listview).setVisibility(View.VISIBLE);
         rootLayout.findViewById(R.id.selected_pack_view).setVisibility(View.GONE);
         rootLayout.findViewById(R.id.sample_pack_empty_view).setVisibility(View.VISIBLE);
+        rootLayout.findViewById(R.id.new_sample_button).setVisibility(View.GONE);
         Animations.fadeIn(findViewById(R.id.sample_pack_listview), 200, 0).start();
     }
     private void showSamplePackFiles(String name, AnimatorSet anim){
@@ -2173,11 +2195,6 @@ public class LaunchPadActivity extends AppCompatActivity {
                     // If the sound is already playing, stop it
                     if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
                         stopSample(s, v);
-                        /*
-                        s.stop();
-                        v.setPressed(false);
-                        launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
-                        */
                         return true;
                     }
                     // Otherwise launch the sample

@@ -4,7 +4,9 @@ import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.provider.MediaStore;
+import android.support.v7.app.AlertDialog;
+import android.support.v7.app.AppCompatDialog;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
 import android.content.ContentResolver;
@@ -33,6 +35,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -44,6 +47,7 @@ import android.view.animation.AnticipateOvershootInterpolator;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -60,6 +64,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Calendar;
+import java.util.zip.Inflater;
 
 import javazoom.jl.converter.WaveFile;
 
@@ -76,12 +81,12 @@ public class SampleEditActivity extends AppCompatActivity {
     private RelativeLayout rootLayout;
     private AudioSampleView sampleView;
     private float sampleRate = 44100;
-    private int sampleLength;
+    private int sampleLength, bpm;
     private long encodedFileSize;
     private boolean showBeats = false;
     private InputStream musicStream;
     private Thread mp3ConvertThread;
-    private ProgressDialog dlg;
+    private View dlg;
     private boolean dlgCanceled;
     private DialogInterface.OnCancelListener dlgCancelListener = new DialogInterface.OnCancelListener() {
         @Override
@@ -95,7 +100,7 @@ public class SampleEditActivity extends AppCompatActivity {
     private boolean isSliceMode = false;
     private boolean isDecoding = false;
     private boolean isGeneratingWaveForm = false;
-    private File origSampleFile;
+    private File origSampleFile, loadedSampleFile;
     private File sampleDirectory;
     private View popup;
     private boolean saveSlice;
@@ -158,6 +163,7 @@ public class SampleEditActivity extends AppCompatActivity {
             mAdView.setVisibility(View.VISIBLE);
             AdRequest adRequest = new AdRequest.Builder()
                     .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
+                    .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
                     .build();
             mAdView.loadAd(adRequest);
         }
@@ -270,15 +276,19 @@ public class SampleEditActivity extends AppCompatActivity {
         sampleView.setColor(intent.getIntExtra(LaunchPadActivity.COLOR, 0));
         origSampleFile = new File(intent.getStringExtra(LaunchPadActivity.SAMPLE_PATH));
         if (origSampleFile.isFile() && origSampleFile.exists()){ // If a sample is being passed, load it and process
-            File loadedSample = new File(WAV_CACHE_FILE_PATH);
+            loadedSampleFile = new File(WAV_CACHE_FILE_PATH);
             try {
-                Utils.CopyFile(origSampleFile, loadedSample);
+                Utils.CopyFile(origSampleFile, loadedSampleFile);
             }catch (IOException e){e.printStackTrace();}
             LoadMediaPlayer(Uri.parse(WAV_CACHE_FILE_PATH));
 
             rootLayout.post(new Runnable() {
                 @Override
                 public void run() {
+                    ActionBar actionBar = getSupportActionBar();
+                    if (actionBar != null){
+                        actionBar.setTitle(origSampleFile.getName());
+                    }
                     sampleView.loadFile(WAV_CACHE_FILE_PATH);
                     sampleView.redraw();
                 }
@@ -383,6 +393,13 @@ public class SampleEditActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_MUSIC_GET && resultCode == RESULT_OK) {
             origSampleFile = null;
+            String title = data.getStringExtra(MediaStore.EXTRA_MEDIA_TITLE);
+            ActionBar actionBar = getSupportActionBar();
+            if (title != null && actionBar != null){
+                actionBar.setTitle(title);
+            } else if (actionBar != null){
+                actionBar.setTitle(R.string.new_sample);
+            }
             decodeAudio(data.getData());
         }
     }
@@ -390,6 +407,10 @@ public class SampleEditActivity extends AppCompatActivity {
     public boolean onKeyDown(int keycode, KeyEvent e) {
         switch (keycode) {
             case KeyEvent.KEYCODE_BACK:
+                if (popup != null && loadedSampleFile != null){
+                    hidePopup();
+                    return true;
+                }
                 if (sampleView.needsSaving()){
                     promptForSave();
                     return true;
@@ -418,27 +439,14 @@ public class SampleEditActivity extends AppCompatActivity {
             rootLayout.addView(popup);
 
             // Start the animation
-            AnimatorSet set = new AnimatorSet();
-            ObjectAnimator alpha = ObjectAnimator.ofFloat(popup, "Alpha", 0f, 1f);
-            ObjectAnimator scaleX = ObjectAnimator.ofFloat(popup, "ScaleX", 0f, 1f);
-            ObjectAnimator scaleY = ObjectAnimator.ofFloat(popup, "ScaleY", 0f, 1f);
-            set.setInterpolator(new AnticipateOvershootInterpolator());
-            set.playTogether(alpha, scaleX, scaleY);
-            set.setStartDelay(delay);
-            set.setTarget(popup);
+            AnimatorSet set = Animations.slideUp(popup, 200, delay, rootLayout.getHeight() / 3);
             set.start();
         }
     }
     private void hidePopup(){
         if (popup != null){
             // Start the animation
-            AnimatorSet set = new AnimatorSet();
-            ObjectAnimator alpha = ObjectAnimator.ofFloat(popup, "Alpha", 1f, 0f);
-            ObjectAnimator scaleX = ObjectAnimator.ofFloat(popup, "ScaleX", 1f, 0f);
-            ObjectAnimator scaleY = ObjectAnimator.ofFloat(popup, "ScaleY", 1f, 0f);
-            set.setInterpolator(new AnticipateOvershootInterpolator());
-            set.playTogether(alpha, scaleX, scaleY);
-            set.setTarget(popup);
+            AnimatorSet set = Animations.slideOutDown(popup, 200, 0, rootLayout.getHeight() / 3);
             set.addListener(new Animator.AnimatorListener() {
                 @Override
                 public void onAnimationStart(Animator animation) {
@@ -565,22 +573,14 @@ public class SampleEditActivity extends AppCompatActivity {
                 LoadMediaPlayer(fullMusicUri);
 
             // Display progress dialog
-            dlg = new ProgressDialog(this);
             if (sampleLength > 0){
-                dlg.setIndeterminate(false);
-                dlg.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-                dlg.setMax((int)encodedFileSize);
+                dlg = getProgressPopup(R.string.decoding_audio_msg, (int)encodedFileSize, false);
             }
             else {
-                dlg.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-                dlg.setIndeterminate(true);
+                dlg = getProgressPopup(R.string.decoding_audio_msg, (int)encodedFileSize, true);
             }
-            dlg.setCancelable(true);
-            dlg.setCanceledOnTouchOutside(false);
-            dlgCanceled = false;
-            dlg.setOnCancelListener(dlgCancelListener);
-            dlg.setMessage("Decoding audio ...");
-            dlg.show();
+
+            showProgressPopup();
             new Thread(new DecodeAudioThread()).start();
         }
         catch (IOException e){
@@ -589,8 +589,7 @@ public class SampleEditActivity extends AppCompatActivity {
     }
     private void loadSample(){
         if (dlg != null)
-            if (dlg.isShowing())
-                dlg.dismiss();
+            hideProgressPopup();
         sampleView.loadFile(WAV_CACHE_FILE_PATH);
         sampleView.redraw();
         LoadMediaPlayer(fullMusicUri);
@@ -693,8 +692,8 @@ public class SampleEditActivity extends AppCompatActivity {
 
     }
     private void promptForSave(){
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle(R.string.dialog_title_check_for_save);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
+        //builder.setTitle(R.string.dialog_title_check_for_save);
         builder.setMessage(R.string.dialog_message_check_for_save);
         builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
             @Override
@@ -721,7 +720,7 @@ public class SampleEditActivity extends AppCompatActivity {
 
             }
         });
-        AlertDialog dialog = builder.create();
+        AppCompatDialog dialog = builder.create();
         dialog.show();
     }
     private void checkSampleSize(){
@@ -752,13 +751,16 @@ public class SampleEditActivity extends AppCompatActivity {
         }
     }
     private void promptForName(@Nullable String suggestedName){
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
         final View layout = getLayoutInflater().inflate(R.layout.sample_file_name_prompt, null);
         final TextView fileNameTextView = (TextView)layout.findViewById(R.id.file_name_preview);
         if (suggestedName != null)
             fileNameTextView.setText(suggestedName);
-        else
-            fileNameTextView.setText("Sample_" + Calendar.getInstance().getTimeInMillis() + ".wav");
+        else if (bpm > 0){
+            fileNameTextView.setText(bpm + "_bpm_Sample_" + Calendar.getInstance().getTimeInMillis() + ".wav");
+        } else {
+            fileNameTextView.setText("???bpm_Sample_" + Calendar.getInstance().getTimeInMillis() + ".wav");
+        }
         final EditText editText = (EditText)layout.findViewById(R.id.sample_name_text);
         editText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -803,15 +805,12 @@ public class SampleEditActivity extends AppCompatActivity {
 
             }
         });
-        AlertDialog dialog = builder.create();
+        AppCompatDialog dialog = builder.create();
         dialog.show();
     }
     private void saveSample(final String filename){
-        dlg = new ProgressDialog(context);
-        dlg.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        dlg.setIndeterminate(true);
-        dlg.setMessage(getString(R.string.save_progress_msg));
-        dlg.show();
+        dlg = getProgressPopup(R.string.save_progress_msg, 100, false);
+        showProgressPopup();
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -826,7 +825,7 @@ public class SampleEditActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            dlg.dismiss();
+                            hideProgressPopup();
                             if (!saveSlice){
                                 Intent result = new Intent("com.nakedape.mixmaticlooppad.RESULT_ACTION", Uri.parse(sampleFile.getAbsolutePath()));
                                 result.putExtra(LaunchPadActivity.TOUCHPAD_ID, sampleId);
@@ -841,7 +840,7 @@ public class SampleEditActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            dlg.dismiss();
+                            hideProgressPopup();
                             Toast.makeText(context, "Error saving file", Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -942,7 +941,7 @@ public class SampleEditActivity extends AppCompatActivity {
             sampleView.setOnAudioProcessingFinishedListener(new AudioSampleView.OnAudioProcessingFinishedListener() {
                 @Override
                 public void OnProcessingFinish() {
-                    dlg.dismiss();
+                    hideProgressPopup();
                     if (sampleView.hasBeatInfo())
                         enableEditBeatsMode();
                     else
@@ -957,21 +956,16 @@ public class SampleEditActivity extends AppCompatActivity {
         sampleView.setSelectionMode(AudioSampleView.BEAT_SELECTION_MODE);
     }
     public void showBeats(){
-        dlg = new ProgressDialog(context);
-        dlg.setMessage("Processing audio");
-        dlg.setIndeterminate(true);
-        dlg.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        dlg.setCancelable(false);
-        dlg.setCanceledOnTouchOutside(false);
+        dlg = getProgressPopup(R.string.decoding_audio_msg, 100, true);
+        showProgressPopup();
         sampleView.identifyBeatsAsync();
-        dlg.show();
     }
     public void startResampleFlow(){
         if (!sampleView.hasBeatInfo()){
             sampleView.setOnAudioProcessingFinishedListener(new AudioSampleView.OnAudioProcessingFinishedListener() {
                 @Override
                 public void OnProcessingFinish() {
-                    dlg.dismiss();
+                    hideProgressPopup();
                     showResampleDialog();
                 }
             });
@@ -1033,21 +1027,16 @@ public class SampleEditActivity extends AppCompatActivity {
         dialog.show();
     }
     private void resample(float ratio){
-        dlg = new ProgressDialog(context);
-        dlg.setMessage("Processing audio");
-        dlg.setIndeterminate(true);
-        dlg.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        dlg.setCancelable(false);
-        dlg.setCanceledOnTouchOutside(false);
+        dlg = getProgressPopup("Processing audio ...", 100, true);
         sampleView.setOnAudioProcessingFinishedListener(new AudioSampleView.OnAudioProcessingFinishedListener() {
             @Override
             public void OnProcessingFinish() {
                 LoadMediaPlayer(Uri.parse(sampleView.getSamplePath()));
-                dlg.dismiss();
+                hideProgressPopup();
             }
         });
         sampleView.resampleAsync(ratio);
-        dlg.show();
+        showProgressPopup();
     }
 
     public void pickColor(){
@@ -1062,6 +1051,65 @@ public class SampleEditActivity extends AppCompatActivity {
         });
         AlertDialog dialog = builder.create();
         dialog.show();
+    }
+
+    private View getProgressPopup(int resId, int max, boolean indeterminate){
+        return getProgressPopup(getString(resId), max, indeterminate);
+    }
+    private View getProgressPopup(String message, int max, boolean indeterminate){
+        if (dlg == null) {
+            LayoutInflater inflater = getLayoutInflater();
+            dlg = inflater.inflate(R.layout.progress_dialog, null);
+            dlg.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    return true;
+                }
+            });
+        }
+        ((TextView)dlg.findViewById(R.id.dialogText)).setText(message);
+        ((ProgressBar)dlg.findViewById(R.id.progressBar)).setMax(max);
+        ((ProgressBar)dlg.findViewById(R.id.progressBar)).setIndeterminate(indeterminate);
+        return dlg;
+    }
+    private void showProgressPopup(){
+        if (dlg != null && rootLayout.findViewById(R.id.progress_popup) == null){
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            rootLayout.addView(dlg, params);
+            Animations.fadeIn(dlg, 200, 0).start();
+        }
+    }
+    private void updateProgress(int progress){
+        if (dlg != null){
+            ((ProgressBar)dlg.findViewById(R.id.progressBar)).setProgress(progress);
+        }
+    }
+    private void hideProgressPopup(){
+        if (dlg != null){
+            AnimatorSet set = Animations.fadeOut(dlg, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    rootLayout.removeView(dlg);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
     }
 
     private void readMediaFormat(){
@@ -1147,7 +1195,7 @@ public class SampleEditActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                dlg.setProgress(bytesProcessed);
+                                updateProgress(bytesProcessed);
                             }
                         });
                         if (!sawInputEOS) {
@@ -1189,7 +1237,7 @@ public class SampleEditActivity extends AppCompatActivity {
             rootLayout.post(new Runnable() {
                 @Override
                 public void run() {
-                    dlg.dismiss();
+                    hideProgressPopup();
                     loadSample();
                 }
             });

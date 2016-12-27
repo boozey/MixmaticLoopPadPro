@@ -40,33 +40,33 @@
         android:translationX="0dp"
         android:visibility="visible"> <!-- -44dp -->
         <ImageButton android:id="@+id/action_select"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="@dimen/toolbar_icon_size"
+            android:layout_height="@dimen/toolbar_icon_size"
             android:layout_margin="4dp"
             android:background="@drawable/ic_action_select"
             android:onClick="toolBarClick"/>
         <ImageButton android:id="@+id/action_loop_mode"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="@dimen/toolbar_icon_size"
+            android:layout_height="@dimen/toolbar_icon_size"
             android:layout_margin="4dp"
             android:background="@drawable/ic_av_loop"
             android:onClick="toolBarClick"/>
         <ImageButton android:id="@+id/action_trim_wav"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="@dimen/toolbar_icon_size"
+            android:layout_height="@dimen/toolbar_icon_size"
             android:layout_margin="4dp"
             android:background="@drawable/ic_action_content_cut"
             android:onClick="toolBarClick"/>
         <ImageButton android:id="@+id/action_set_volume"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="@dimen/toolbar_icon_size"
+            android:layout_height="@dimen/toolbar_icon_size"
             android:layout_margin="4dp"
             android:background="@drawable/ic_av_equalizer"
             android:onClick="toolBarClick"/>
         <ImageButton android:id="@+id/action_edit_beats"
-            android:layout_width="wrap_content"
+            android:layout_width="@dimen/toolbar_icon_size"
             android:layout_margin="4dp"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/toolbar_icon_size"
             android:background="@drawable/ic_beat"
             android:onClick="toolBarClick"
             android:visibility="gone"/>
@@ -103,8 +103,7 @@
         android:onClick="RecordButtonClick"/>
 
 </RelativeLayout>
-    <com.google.android.gms.ads.AdView
-        android:id="@+id/adView"
+    <com.google.android.gms.ads.AdView android:id="@+id/adView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"

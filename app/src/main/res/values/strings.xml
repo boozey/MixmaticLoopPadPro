@@ -48,6 +48,7 @@
 
     <!-- Counter View Strings-->
     <string name="bpm_display">%d BPM</string>
+    <string name="time_sig_display">%d / 4</string>
 
     <!-- Sample Library Strings -->
     <string name="my_samples">My Samples</string>
@@ -55,6 +56,7 @@
     <string name="sample_packs">Sample Packs</string>
     <string name="sample_packs_underlined"><u>Sample Packs</u></string>
     <string name="no_sample_packs_msg">Download more sample packs</string>
+    <string name="create_sample_button_text">Create new sample</string>
 
     <!-- Store Strings -->
     <string name="buy">Buy</string>
@@ -97,9 +99,11 @@
     <string name="file_exists_message">A sample with this name already exists</string>
 
     <!-- Strings for new sample popup-->
-    <string name="new_sample_popup_title">Create New Sample</string>
+    <string name="new_sample_popup_title">Create new samples from &#8230;</string>
     <string name="music_library">Music Library</string>
-    <string name="mic_record">Record</string>
+    <string name="mic_record">Microphone</string>
+    <string name="new_sample">New sample</string>
+    <string name="decoding_audio_msg">Decoding audio &#8230;</string>
 
     <!-- Strings for beat edit context menu -->
     <string name="action_insert_beat">Insert beat</string>
