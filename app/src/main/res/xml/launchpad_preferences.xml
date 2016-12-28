@@ -1,15 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/mix_pref_title">
+
     <com.nakedape.mixmaticlooppad.NumberPickerPreference
         android:key="pref_bpm"
         android:title="@string/pref_bpm"
+        android:summary="@string/pref_bpm_summary"
         android:persistent="true"
         android:defaultValue="120"/>
 
     <ListPreference android:key="pref_time_signature"
+
         android:title="@string/pref_time_signature"
+        android:summary="@string/pref_time_sig_summary"
         android:entries="@array/time_signatures"
         android:entryValues="@array/time_signature_values"
         android:defaultValue="4"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/loop_pad_pref_title">
+
+    <SwitchPreference android:key="always_show_sample_name_overlay"
+        android:title="@string/show_sample_name_overlay"
+        android:summary="@string/show_sample_overlay_summary"
+        android:defaultValue="false" />
+        <ListPreference android:key="pref_launch_mode"
+            android:title="@string/pref_launch_mode"
+            android:entries="@array/launch_modes"
+            android:entryValues="@array/launch_mode_values"
+            android:defaultValue="0"/>
+        <CheckBoxPreference android:key="pref_loop_mode"
+            android:title="@string/pref_loop_mode"
+            android:summary="@string/pref_loop_summary"
+            android:defaultValue="false"/>
+        <ListPreference android:key="pref_quantization_mode"
+            android:title="@string/pref_quantization"
+            android:entries="@array/quantization_modes"
+            android:entryValues="@array/quant_mode_values"
+            android:defaultValue="0"/>
+    </PreferenceCategory>
 </PreferenceScreen>

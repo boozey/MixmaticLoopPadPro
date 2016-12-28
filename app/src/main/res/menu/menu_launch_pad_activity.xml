@@ -20,6 +20,9 @@
         android:title="@string/action_edit_mode"
         android:icon="@drawable/ic_action_settings"
         app:showAsAction="always"/>
+    <item android:id="@+id/action_clear_pads"
+        android:title="@string/action_clear_pads"
+        app:showAsAction="never"/>
     <item android:id="@+id/action_settings"
         android:title="@string/action_settings"
         android:orderInCategory="100"

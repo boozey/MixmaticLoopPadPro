@@ -18,6 +18,7 @@
         <item>#ff004600</item>
         <item>#ff462e00</item>
     </string-array>
+
     <string-array name="time_signatures">
         <item>Two (2/4)</item>
         <item>Three (3/4)</item>
@@ -27,5 +28,29 @@
         <item>2</item>
         <item>3</item>
         <item>4</item>
+    </string-array>
+
+    <string-array name="launch_modes">
+        <item>Gate</item>
+        <item>Trigger</item>
+    </string-array>
+    <string-array name="launch_mode_values">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
+
+    <string-array name="quantization_modes">
+        <item>None</item>
+        <item>Beat</item>
+        <item>Half beat</item>
+        <item>Quarter beat</item>
+        <item>Bar</item>
+    </string-array>
+    <string-array name="quant_mode_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>4</item>
+        <item>5</item>
     </string-array>
 </resources>

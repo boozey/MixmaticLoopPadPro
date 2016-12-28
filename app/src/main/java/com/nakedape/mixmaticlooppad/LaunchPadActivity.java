@@ -29,12 +29,11 @@ import android.media.MediaRecorder;
 import android.os.*;
 import android.os.Process;
 import android.preference.PreferenceManager;
+import android.support.annotation.IntegerRes;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatDialog;
 import android.support.v7.content.res.AppCompatResources;
-import android.support.v7.view.ActionMode;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -52,14 +51,11 @@ import android.view.animation.AnticipateOvershootInterpolator;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.BaseExpandableListAdapter;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ExpandableListView;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.NumberPicker;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -96,11 +92,10 @@ import java.util.TimerTask;
 import IABUtils.IabHelper;
 import IABUtils.IabResult;
 import IABUtils.Inventory;
-import IABUtils.Purchase;
 import javazoom.jl.converter.WaveFile;
 
 
-public class LaunchPadActivity extends AppCompatActivity {
+public class LaunchPadActivity extends AppCompatActivity implements SharedPreferences.OnSharedPreferenceChangeListener{
 
     private static final String LOG_TAG = "LaunchPadActivity";
 
@@ -301,6 +296,9 @@ public class LaunchPadActivity extends AppCompatActivity {
             case R.id.action_reset:
                 resetRecording();
                 return true;
+            case R.id.action_clear_pads:
+                removeAllSamples();
+                return true;
         }
         return super.onOptionsItemSelected(item);
     }
@@ -358,6 +356,30 @@ public class LaunchPadActivity extends AppCompatActivity {
                 return super.onKeyDown(keycode, e);
         }
     }
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        switch (key){
+            case ALWAYS_SHOW_SAMPLE_NAME_OVERLAY:
+                if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false))
+                    rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.VISIBLE);
+                else
+                    rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.GONE);
+                break;
+            case PREF_BPM:
+                bpm = activityPrefs.getInt(PREF_BPM, 120);
+                if (getSupportActionBar() != null)
+                    ((TextView)getSupportActionBar().getCustomView().findViewById(R.id.bpm_view)).setText(getString(R.string.bpm_display,
+                            bpm));
+
+                break;
+            case PREF_TIME_SIGNATURE:
+                timeSignature = Integer.valueOf(activityPrefs.getString(PREF_TIME_SIGNATURE, "4"));
+                if (getSupportActionBar() != null)
+                    ((TextView)getSupportActionBar().getCustomView().findViewById(R.id.time_sig_view)).setText(getString(R.string.time_sig_display,
+                            timeSignature));
+                break;
+        }
+    }
 
     // Initialization methods
     private void loadInBackground(){
@@ -365,6 +387,7 @@ public class LaunchPadActivity extends AppCompatActivity {
         launchPadprefs = getPreferences(MODE_PRIVATE);
         PreferenceManager.setDefaultValues(this, R.xml.sample_edit_preferences, true);
         activityPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+        activityPrefs.registerOnSharedPreferenceChangeListener(this);
 
         // Instance of runtime to check memory use
         runtime = Runtime.getRuntime();
@@ -491,6 +514,9 @@ public class LaunchPadActivity extends AppCompatActivity {
             }
         });
 
+        if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false))
+            rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.VISIBLE);
+
         // Setup App bar
         Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         myToolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
@@ -532,6 +558,7 @@ public class LaunchPadActivity extends AppCompatActivity {
             launchQueue = savedData.getLaunchQueue();
             // Setup touch pads from retained fragment
             setupPadsFromFrag();
+            updatePadOverlay();
         }
         else{
             FragmentManager fm = getFragmentManager();
@@ -547,6 +574,12 @@ public class LaunchPadActivity extends AppCompatActivity {
                         @Override
                         public boolean accept(File pathname) {
                             return pathname.getName().endsWith(".wav");
+                        }
+                    });
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            updatePadOverlay();
                         }
                     });
                     //sampleListAdapter.addAll(sampleNames);
@@ -752,10 +785,10 @@ public class LaunchPadActivity extends AppCompatActivity {
         s.setOnPlayFinishedListener(samplePlayListener);
         samples.put(id, s);
         String padNumber = (String)pad.getTag();
-        s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, false));
-        s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER));
+        s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, activityPrefs.getBoolean(PREF_LOOP_MODE, false)));
+        s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Integer.valueOf(activityPrefs.getString(PREF_LAUNCH_MODE, "0"))));
         s.setVolume(launchPadprefs.getFloat(padNumber + SAMPLE_VOLUME, 0.5f * AudioTrack.getMaxVolume()));
-        s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE));
+        s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Integer.valueOf(activityPrefs.getString(PREF_QUANTIZATION, "0"))));
         pad.setBackgroundResource(padColorDrawables[launchPadprefs.getInt(padNumber + COLOR, 0)]);
     }
     private void setPadColor(int color, TouchPad pad){
@@ -793,6 +826,13 @@ public class LaunchPadActivity extends AppCompatActivity {
         editor.apply();
         updatePadOverlay();
     }
+    private void removeAllSamples(){
+        ArrayList<Integer> temp = (ArrayList<Integer>)activePads.clone();
+        for (int i : temp)
+            removeSample(i);
+        launchEvents = new ArrayList<>(20);
+        launchQueue = new ArrayList<>(5);
+    }
     private void notifySampleLoadError(Sample s){
         String error = getString(R.string.error_sample_load) + " " + new File(s.getPath()).getName();
         if (s.getState() == Sample.ERROR_OUT_OF_MEMORY)
@@ -823,6 +863,12 @@ public class LaunchPadActivity extends AppCompatActivity {
     }
 
     /** Edit Mode **/
+    public static final String ALWAYS_SHOW_SAMPLE_NAME_OVERLAY = "always_show_sample_name_overlay";
+    public static final String PREF_BPM = "pref_bpm";
+    public static final String PREF_TIME_SIGNATURE = "pref_time_signature";
+    public static final String PREF_LAUNCH_MODE = LaunchPadPreferencesFragment.PREF_LAUNCH_MODE;
+    public static final String PREF_LOOP_MODE = LaunchPadPreferencesFragment.PREF_LOOP_MODE;
+    public static final String PREF_QUANTIZATION = LaunchPadPreferencesFragment.PREF_QUANTIZATION;
     private int[] padTextViewIds = {R.id.touchPad1_textview, R.id.touchPad2_textview, R.id.touchPad3_textview, R.id.touchPad4_textview,
             R.id.touchPad5_textview, R.id.touchPad6_textview, R.id.touchPad7_textview, R.id.touchPad8_textview, R.id.touchPad9_textview,
             R.id.touchPad10_textview, R.id.touchPad11_textview, R.id.touchPad12_textview, R.id.touchPad13_textview, R.id.touchPad14_textview,
@@ -910,16 +956,16 @@ public class LaunchPadActivity extends AppCompatActivity {
 
                 switch (launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE)){
                     case Sample.Q_BEAT:
-                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_quarter_note);
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_q_beat);
                         break;
                     case Sample.Q_HALF_BEAT:
-                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_eigth_note);
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_q_half_beat);
                         break;
                     case Sample.Q_BAR:
-                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_whole_note);
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_q_bar);
                         break;
                     default:
-                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_beat);
+                        rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_q_none);
                         break;
                 }
             }
@@ -1060,6 +1106,13 @@ public class LaunchPadActivity extends AppCompatActivity {
             activePads.add(padId);
             editor.putInt(pad.getTag().toString() + COLOR, color);
             editor.putString(pad.getTag().toString() + SAMPLE_PATH, path);
+            int launchMode = Integer.valueOf(activityPrefs.getString(PREF_LAUNCH_MODE, String.valueOf(Sample.LAUNCHMODE_TRIGGER)));
+            editor.putInt(pad.getTag().toString() + LAUNCHMODE, launchMode);
+            editor.putBoolean(pad.getTag().toString() + LOOPMODE, activityPrefs.getBoolean(PREF_LOOP_MODE, false));
+            if (launchMode == Sample.LAUNCHMODE_TRIGGER)
+                editor.putInt(pad.getTag().toString() + QUANTIZE_MODE, Integer.valueOf(activityPrefs.getString(PREF_QUANTIZATION, String.valueOf(Sample.Q_NONE))));
+            else
+                editor.putInt(pad.getTag().toString() + QUANTIZE_MODE, Sample.Q_NONE);
             editor.commit();
             loadSample(sample, pad);
             pad.setOnLongClickListener(new View.OnLongClickListener() {
@@ -1105,8 +1158,6 @@ public class LaunchPadActivity extends AppCompatActivity {
 
     // Tool bar
     private void showToolBar(){
-        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
-        overlay.setVisibility(View.VISIBLE);
         View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
         View doneButton = rootLayout.findViewById(R.id.done_button);
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
@@ -1116,14 +1167,18 @@ public class LaunchPadActivity extends AppCompatActivity {
         slideLeft.setTarget(toolBar);
         ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", doneButton.getHeight() + params.bottomMargin, 0);
         slideUp.setTarget(doneButton);
-        AnimatorSet fadeIn = Animations.fadeIn(overlay, 200, 0);
         set.setInterpolator(new AccelerateDecelerateInterpolator());
-        set.playTogether(slideLeft, slideUp, fadeIn);
+        if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false)){
+            set.playTogether(slideLeft, slideUp);
+        } else {
+            View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
+            overlay.setVisibility(View.VISIBLE);
+            AnimatorSet fadeIn = Animations.fadeIn(overlay, 200, 0);
+            set.playTogether(slideLeft, slideUp, fadeIn);
+        }
         set.start();
     }
     private void hideToolBar(){
-        View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
-        overlay.setVisibility(View.GONE);
         View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
         View doneButton = rootLayout.findViewById(R.id.done_button);
         RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)doneButton.getLayoutParams();
@@ -1135,9 +1190,15 @@ public class LaunchPadActivity extends AppCompatActivity {
         slideLeft.setTarget(toolBar);
         ObjectAnimator slideUp = ObjectAnimator.ofFloat(doneButton, "TranslationY", 0, doneButton.getHeight() + params.bottomMargin);
         slideUp.setTarget(doneButton);
-        AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
         set.setInterpolator(new AccelerateDecelerateInterpolator());
-        set.playTogether(slideLeft, slideUp, fadeOut);
+        if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false)){
+            set.playTogether(slideLeft, slideUp);
+        } else {
+            View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
+            overlay.setVisibility(View.GONE);
+            AnimatorSet fadeOut = Animations.fadeOut(overlay, 200, 0);
+            set.playTogether(slideLeft, slideUp, fadeOut);
+        }
         // Show add after animation
         set.addListener(new Animator.AnimatorListener() {
             @Override
@@ -1193,9 +1254,11 @@ public class LaunchPadActivity extends AppCompatActivity {
             case R.id.action_launch_mode:
                 if (samples.indexOfKey(selectedSampleID) >= 0 && launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER) == Sample.LAUNCHMODE_TRIGGER){
                     rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_keyboard);
+                    rootLayout.findViewById(R.id.action_quantize).setBackgroundResource(R.drawable.ic_q_none);
                     Sample s = samples.get(selectedSampleID);
                     s.setLaunchMode(Sample.LAUNCHMODE_GATE);
                     prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                    prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
                     prefEditor.apply();
                 } else if (samples.indexOfKey(selectedSampleID) >= 0){
                     rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_album);
@@ -1220,33 +1283,38 @@ public class LaunchPadActivity extends AppCompatActivity {
                 return;
             case R.id.action_quantize:
                 if (samples.indexOfKey(selectedSampleID) >= 0) {
+                    if (samples.get(selectedSampleID).getLaunchMode() == Sample.LAUNCHMODE_GATE){
+                        Toast.makeText(context, R.string.gate_mode_quantize_toast, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     switch (launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE)) {
                         case Sample.Q_NONE:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_BEAT);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BEAT);
-                            v.setBackgroundResource(R.drawable.ic_quarter_note);
+                            v.setBackgroundResource(R.drawable.ic_q_beat);
                             Log.d(LOG_TAG, "Beat");
                             break;
                         case Sample.Q_BEAT:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_HALF_BEAT);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_HALF_BEAT);
-                            v.setBackgroundResource(R.drawable.ic_eigth_note);
+                            v.setBackgroundResource(R.drawable.ic_q_half_beat);
                             Log.d(LOG_TAG, "Half beat");
                             break;
                         case Sample.Q_HALF_BEAT:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_BAR);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
-                            v.setBackgroundResource(R.drawable.ic_whole_note);
+                            v.setBackgroundResource(R.drawable.ic_q_bar);
                             Log.d(LOG_TAG, "Bar");
                             break;
                         case Sample.Q_BAR:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_NONE);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
-                            v.setBackgroundResource(R.drawable.ic_beat);
+                            v.setBackgroundResource(R.drawable.ic_q_none);
                             Log.d(LOG_TAG, "None");
                             break;
                     }
                     prefEditor.apply();
+                    return;
                 }
             default:
                 return;
@@ -2553,8 +2621,9 @@ public class LaunchPadActivity extends AppCompatActivity {
         isRecording = false;
         counter = 0;
         recordingEndTime = 0;
-        launchEvents = new ArrayList<LaunchEvent>(50);
-        loopingSamplesPlaying = new ArrayList<LaunchEvent>(5);
+        launchEvents = new ArrayList<>(50);
+        launchQueue = new ArrayList<>(10);
+        loopingSamplesPlaying = new ArrayList<>(5);
         updateCounterMessage();
     }
     private void updateCounterMessage(){
@@ -3114,10 +3183,10 @@ public class LaunchPadActivity extends AppCompatActivity {
         public static final int ERROR_OUT_OF_MEMORY = 9001;
         public static final int ERROR_FILE_IO = 9002;
         public static final int Q_NONE = 0;
-        public static final int Q_BAR = 5;
         public static final int Q_BEAT = 1;
         public static final int Q_HALF_BEAT = 2;
         public static final int Q_QUART_BEAT = 4;
+        public static final int Q_BAR = 5;
 
         // Private fields
         private int id;

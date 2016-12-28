@@ -28,6 +28,7 @@
     <string name="action_fast_forward">Fast forward</string>
     <string name="action_rewind">Rewind</string>
     <string name="action_save_mix">Export mix as wav</string>
+    <string name="action_clear_pads">Clear all touch pads</string>
 
     <!-- Common strings dialog -->
     <string name="save">Save</string>
@@ -135,6 +136,7 @@
     <string name="action_set_volume">Volume</string>
     <string name="action_reset">Reset recording</string>
     <string name="button_done">Done</string>
+    <string name="gate_mode_quantize_toast">Samples launched in gate mode are not quantized</string>
 
     <!-- Delete sample dialog strings -->
     <string name="remove_sample_dialog_title">Remove sample</string>
@@ -152,11 +154,29 @@
     <string name="sample_size_warning" formatted="false">Sample length is %.3f seconds.\nLarge samples can slow performance.\nProceed with Save?</string>
 
     <!-- Preference strings -->
+    <string name="mix_pref_title">Mix/Playback Preferences</string>
     <string name="pref_beat_threshold">Beat detection threshold</string>
     <string name="title_activity_sample_edit_preferences">Preferences</string>
-    <string name="pref_bpm">Beats per minute</string>
+    <string name="pref_bpm">Tempo</string>
+    <string name="pref_bpm_summary">%d BPM\nThe number of beats per minute</string>
     <string name="pref_time_signature">Time signature</string>
+    <string name="pref_time_sig_summary">%s / 4\nThe number of beats in one bar.  Important for samples that are quantized to the bar.</string>
     <string name="numberpicker_textview">Selected value: </string>
+    <string name="loop_pad_pref_title">Loop pad preferences</string>
+    <string name="show_sample_name_overlay">Always show sample name overlay</string>
+    <string name="show_sample_overlay_summary">Display the names of the samples loaded in the touch pads at all times</string>
+    <string name="pref_launch_mode">Default launch mode</string>
+    <string name="trigger_summary">Trigger\nThe sample will start when pressed and stop when pressed a second time</string>
+    <string name="gate_summary">Gate\nThe sample will play only while pressed</string>
+    <string name="pref_loop_mode">Loop by default</string>
+    <string name="pref_loop_summary">When a new sample is added to a touch pad, it will be set to loop</string>
+    <string name="pref_quantization">Default quantization mode</string>
+    <string name="quant_none_summary">None\nThe sample will start immediately</string>
+    <string name="quant_beat_summary">Beat\nThe sample will start on the next beat</string>
+    <string name="quant_half_summary">Half beat\nThe sample will start on the next half beat</string>
+    <string name="quant_quarter_summary">Quarter beat\nThe sample will start on the next quarter beat</string>
+    <string name="quant_bar_summary">Bar\nThe sample will start on the first beat of the next bar as determined by the time signature</string>
+    <string name="quant_gate_mode_summary">Samples are not quantized when launched in gate mode</string>
 
     <!-- Strings for re-sample dialog -->
     <string name="sample_tempo_msg" formatted="false">Sample tempo: %.2f</string>
