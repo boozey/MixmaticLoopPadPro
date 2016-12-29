@@ -43,11 +43,16 @@ public class AudioSampleView extends View implements View.OnTouchListener {
     public interface OnAudioProcessingFinishedListener {
         void OnProcessingFinish();
     }
+    private OnAudioProcessingFinishedListener processingFinishedListener;
+
+    public interface OnAudioRecordingFinishedListener {
+        void OnRecordingFinished();
+    }
+    private OnAudioRecordingFinishedListener recordingFinishedListener;
 
     private static final String LOG_TAG = "AudioSampleView";
 
     private Context mContext;
-    private OnAudioProcessingFinishedListener processingFinishedListener;
     private String CACHE_PATH;
     private String samplePath;
     private String backupPath;
@@ -120,6 +125,8 @@ public class AudioSampleView extends View implements View.OnTouchListener {
 
     public void setSelectionMode(int selectionMode){
         this.selectionMode = selectionMode;
+        if (selectionMode == PAN_ZOOM_MODE)
+            clearSelection();
         invalidate();
     }
     public int getSelectionMode(){
@@ -317,11 +324,14 @@ public class AudioSampleView extends View implements View.OnTouchListener {
     public Bitmap getWaveFormThumbnail(){
         return Utils.getScaledBitmap(wavBitmap, 80, 80);
     }
+    public void setOnAudioRecordingFinishedListener(OnAudioRecordingFinishedListener listener){
+        recordingFinishedListener = listener;
+    }
     public void startRecording(){
         if (!isMicRecording()) {
             // Prepare new recording file
-            samplePath = CACHE_PATH + "/recording.wav";
-            File sampleFile = new File(samplePath);
+            File sampleFile = new File(CACHE_PATH, "mic_recording.wav");
+            samplePath = sampleFile.getAbsolutePath();
             if (sampleFile.exists()) sampleFile.delete();
             // Prepare bitmap
             int bitmapHeight = getHeight();
@@ -409,6 +419,7 @@ public class AudioSampleView extends View implements View.OnTouchListener {
                 public void run() {
                     loadFile(samplePath);
                     invalidate();
+                    if (recordingFinishedListener != null) recordingFinishedListener.OnRecordingFinished();
                 }
             });
         }

@@ -246,8 +246,12 @@ public class SampleEditActivity extends AppCompatActivity {
                     new Thread(new PlayIndicator()).start();
                 }
             }
-            else if (savedData.samplePath != null)
+            else if (savedData.loadedSampleFile != null) {
+                loadedSampleFile = savedData.loadedSampleFile;
+                origSampleFile = savedData.origSampleFile;
+                updateInfoDisplay();
                 LoadMediaPlayer(Uri.parse(savedData.samplePath));
+            }
         }
         else if (intent.hasExtra(LaunchPadActivity.SAMPLE_PATH)){
             // sample edit is loading a sample from a launch pad
@@ -275,8 +279,10 @@ public class SampleEditActivity extends AppCompatActivity {
     private void LoadSampleFromIntent(Intent intent){
         sampleView.setColor(intent.getIntExtra(LaunchPadActivity.COLOR, 0));
         origSampleFile = new File(intent.getStringExtra(LaunchPadActivity.SAMPLE_PATH));
+        savedData.origSampleFile = origSampleFile;
         if (origSampleFile.isFile() && origSampleFile.exists()){ // If a sample is being passed, load it and process
             loadedSampleFile = new File(WAV_CACHE_FILE_PATH);
+            savedData.loadedSampleFile = loadedSampleFile;
             try {
                 Utils.CopyFile(origSampleFile, loadedSampleFile);
             }catch (IOException e){e.printStackTrace();}
@@ -291,6 +297,7 @@ public class SampleEditActivity extends AppCompatActivity {
                     }
                     sampleView.loadFile(WAV_CACHE_FILE_PATH);
                     sampleView.redraw();
+                    updateInfoDisplay();
                 }
             });
         }
@@ -510,11 +517,19 @@ public class SampleEditActivity extends AppCompatActivity {
     public void RecordButtonClick(View v){
         if (sampleView.isMicRecording()) {
             sampleView.stopRecording();
-            LoadMediaPlayer(Uri.parse(sampleView.getSamplePath()));
             rootLayout.removeView(v);
         }
         else {
             final View recordButton = v;
+            sampleView.setOnAudioRecordingFinishedListener(new AudioSampleView.OnAudioRecordingFinishedListener() {
+                @Override
+                public void OnRecordingFinished() {
+                    loadedSampleFile = new File(sampleView.getSamplePath());
+                    savedData.loadedSampleFile = loadedSampleFile;
+                    LoadMediaPlayer(Uri.parse(sampleView.getSamplePath()));
+                    updateInfoDisplay();
+                }
+            });
             // Start the animation and the recording
             AnimatorSet set = new AnimatorSet();
             ObjectAnimator translateX = ObjectAnimator.ofFloat(recordButton, "X", rootLayout.getWidth() - recordButton.getWidth());
@@ -592,7 +607,33 @@ public class SampleEditActivity extends AppCompatActivity {
             hideProgressPopup();
         sampleView.loadFile(WAV_CACHE_FILE_PATH);
         sampleView.redraw();
+        updateInfoDisplay();
         LoadMediaPlayer(fullMusicUri);
+    }
+    private void updateInfoDisplay(){
+        if (origSampleFile != null && origSampleFile.exists())
+            ((TextView)rootLayout.findViewById(R.id.filename_view)).setText(origSampleFile.getName());
+        else if (loadedSampleFile != null && loadedSampleFile.exists())
+            ((TextView)rootLayout.findViewById(R.id.filename_view)).setText(loadedSampleFile.getName());
+        else
+            ((TextView)rootLayout.findViewById(R.id.filename_view)).setText(R.string.unavailable);
+
+        if (loadedSampleFile != null && loadedSampleFile.exists()) {
+            ((TextView) rootLayout.findViewById(R.id.sample_rate_view)).setText(getString(R.string.sample_rate, Utils.getWavSampleRate(loadedSampleFile)));
+            ((TextView) rootLayout.findViewById(R.id.sample_length_view)).setText(getString(R.string.sample_length_seconds, Utils.getWavLengthInSeconds(loadedSampleFile, Utils.getWavSampleRate(loadedSampleFile))));
+
+            double displaySize = loadedSampleFile.length();
+            if (displaySize < 10 * 1024) {
+                ((TextView) rootLayout.findViewById(R.id.sample_size_view)).setText(getString(R.string.sample_size_bytes, displaySize));
+            } else if (displaySize < 1000 * 1024) {
+                displaySize = displaySize / 1024;
+                ((TextView) rootLayout.findViewById(R.id.sample_size_view)).setText(getString(R.string.sample_size_kb, displaySize));
+            } else {
+                displaySize = displaySize / (1000 * 1024);
+                ((TextView) rootLayout.findViewById(R.id.sample_size_view)).setText(getString(R.string.sample_size_mb, displaySize));
+            }
+        }
+
     }
 
     // Media Player methods
@@ -636,6 +677,7 @@ public class SampleEditActivity extends AppCompatActivity {
     public void Play(View view){
         if (mPlayer != null && mPlayer.isPlaying()){
                 continuePlaying = false;
+            am.abandonAudioFocus(afChangeListener);
                 findViewById(R.id.buttonPlay).setBackgroundResource(R.drawable.button_play_large);
 
         } else if (sampleView.getSamplePath() != null){
@@ -646,7 +688,7 @@ public class SampleEditActivity extends AppCompatActivity {
                     // Request permanent focus.
                     AudioManager.AUDIOFOCUS_GAIN);
 
-            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED || result == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT || result == AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK) {
                 if (mPlayer != null ){
                     findViewById(R.id.buttonPlay).setBackgroundResource(R.drawable.button_pause_large);
                     sampleView.isPlaying = true;

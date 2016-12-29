@@ -99,6 +99,14 @@
     <string name="sample_name_message">Enter a name for this sample</string>
     <string name="file_exists_message">A sample with this name already exists</string>
 
+    <!-- Wav file info strings -->
+    <string name="unavailable">Unavailable</string>
+    <string name="sample_rate">%d hz</string>
+    <string name="sample_length_seconds">%f seconds</string>
+    <string name="sample_size_bytes">%f Bytes</string>
+    <string name="sample_size_kb">%f KB</string>
+    <string name="sample_size_mb">%f MB</string>
+
     <!-- Strings for new sample popup-->
     <string name="new_sample_popup_title">Create new samples from &#8230;</string>
     <string name="music_library">Music Library</string>

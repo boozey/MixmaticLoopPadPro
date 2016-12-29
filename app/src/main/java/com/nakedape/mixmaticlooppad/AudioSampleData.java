@@ -5,6 +5,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +15,7 @@ import java.util.List;
 public class AudioSampleData extends Fragment {
 
     String samplePath;
+    File loadedSampleFile, origSampleFile;
     double sampleLength, selectionStartTime, selectionEndTime, windowStartTime, windowEndTime;
 
     List<BeatInfo> beatsData = new ArrayList<BeatInfo>();
