@@ -2,13 +2,17 @@ package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
@@ -39,6 +43,9 @@ import android.widget.Toast;
 
 import com.firebase.ui.auth.AuthUI;
 import com.firebase.ui.auth.ui.ResultCodes;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -99,9 +106,6 @@ public class StoreActivity extends AppCompatActivity {
         rootLayout = (RelativeLayout)findViewById(R.id.rootLayout);
         appPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 
-        // Initialize Firebase Analytics
-        firebaseAnalytics = FirebaseAnalytics.getInstance(context);
-
         // Initialize navigation bar
         BottomNavigationView.OnNavigationItemSelectedListener navListener = new BottomNavigationView.OnNavigationItemSelectedListener() {
             @Override
@@ -129,27 +133,30 @@ public class StoreActivity extends AppCompatActivity {
             bar.setPadding(0, 0, 0, 0);
         }
 
+        // Check network connection
+        checkInternetConnection();
+
         // Initialize price list with default values
         packPriceList = new HashMap<>();
         packPriceList.put(SKU_TWO_DOLLAR_PACK, "$2.00");
 
+        // Initialize Firebase Analytics
+        firebaseAnalytics = FirebaseAnalytics.getInstance(context);
+
         // In-app billing init
-        String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
-        mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
-        mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
-            public void onIabSetupFinished(IabResult result) {
-                if (!result.isSuccess()) {
-                    // Oh no, there was a problem.
-                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
-                }
-                // Hooray, IAB is fully set up!
-                if (getIntent().hasExtra(SHOW_APP_EXTRAS)) {
-                    hideSamplePacks();
-                    showAppExtras();
-                }
-                querySkuDetails();
-            }
-        });
+        initializeIAB();
+
+        // Initialize AdMob
+        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+            MobileAds.initialize(getApplicationContext(), getString(R.string.admob_id));
+            AdView mAdView = (AdView) findViewById(R.id.adView);
+            mAdView.setVisibility(View.VISIBLE);
+            AdRequest adRequest = new AdRequest.Builder()
+                    .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
+                    .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
+                    .build();
+            mAdView.loadAd(adRequest);
+        }
 
         // Setup Firebase authentication
         mAuth = FirebaseAuth.getInstance();
@@ -266,6 +273,7 @@ public class StoreActivity extends AppCompatActivity {
             e.printStackTrace();
         }
         mBillingHelper = null;
+        unregisterNetworkListener();
     }
 
     @Override
@@ -306,7 +314,7 @@ public class StoreActivity extends AppCompatActivity {
 
             // No network
             if (resultCode == ResultCodes.RESULT_NO_NETWORK) {
-                Toast.makeText(context, R.string.no_network, Toast.LENGTH_SHORT).show();
+                Toast.makeText(context, R.string.network_error, Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -319,6 +327,8 @@ public class StoreActivity extends AppCompatActivity {
         }
     }
 
+    // Iniitialization
+    private BroadcastReceiver br;
     private void setupFolders(){
         // Prepare stoarage directories
         if (Utils.isExternalStorageWritable()){
@@ -334,7 +344,92 @@ public class StoreActivity extends AppCompatActivity {
         // Folder to hold cached sample pack descriptions and images
         cacheFolder = getCacheDir();
     }
+    private void checkInternetConnection() {
+        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true) && br == null) {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo netInfo = cm.getActiveNetworkInfo();
+            //should check null because in airplane mode it will be null
+            if (netInfo == null || !netInfo.isConnected()) disableApp();
 
+            br = new BroadcastReceiver() {
+
+                @Override
+                public void onReceive(Context context, Intent intent) {
+
+                    Bundle extras = intent.getExtras();
+
+                    NetworkInfo info = (NetworkInfo) extras
+                            .getParcelable("networkInfo");
+
+                    if (info != null) {
+                        NetworkInfo.State state = info.getState();
+
+                        if (state == NetworkInfo.State.CONNECTED) {
+                            enableApp();
+                            //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
+
+                        } else if(appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+                            disableApp();
+                            //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                        }
+                    }
+
+                }
+            };
+
+            final IntentFilter intentFilter = new IntentFilter();
+            intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+            registerReceiver((BroadcastReceiver) br, intentFilter);
+        }
+    }
+    private void initializeIAB(){
+        String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
+        mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
+        mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
+            public void onIabSetupFinished(IabResult result) {
+                if (!result.isSuccess()) {
+                    // Oh no, there was a problem.
+                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+                }
+                // Hooray, IAB is fully set up!
+                if (getIntent().hasExtra(SHOW_APP_EXTRAS)) {
+                    hideSamplePacks();
+                    showAppExtras();
+                }
+                querySkuDetails();
+            }
+        });
+    }
+    private void unregisterNetworkListener(){
+        if (br != null)
+            unregisterReceiver(br);
+    }
+    private void disableApp(){
+        if (rootLayout.findViewById(R.id.no_network_overlay) == null) {
+            LayoutInflater inflater = getLayoutInflater();
+            View overlay = inflater.inflate(R.layout.no_network_overlay, null);
+            overlay.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    return true;
+                }
+            });
+            ((TextView)overlay.findViewById(R.id.no_network_msg_view)).setText(R.string.store_no_network_msg);
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            overlay.setLayoutParams(params);
+            rootLayout.addView(overlay);
+            findViewById(R.id.bottom_navigation).setVisibility(View.GONE);
+            findViewById(R.id.adView).setVisibility(View.GONE);
+        }
+    }
+    private void enableApp(){
+        View overlay = rootLayout.findViewById(R.id.no_network_overlay);
+        if (overlay != null)
+            rootLayout.removeView(overlay);
+
+        findViewById(R.id.bottom_navigation).setVisibility(View.VISIBLE);
+        findViewById(R.id.adView).setVisibility(View.VISIBLE);
+    }
     // Store
     private MediaPlayer mediaPlayer;
     private Snackbar snackbar;

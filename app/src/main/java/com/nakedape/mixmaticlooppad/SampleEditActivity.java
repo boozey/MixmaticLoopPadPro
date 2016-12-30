@@ -4,6 +4,10 @@ import android.animation.Animator;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.provider.MediaStore;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatDialog;
@@ -83,7 +87,6 @@ public class SampleEditActivity extends AppCompatActivity {
     private float sampleRate = 44100;
     private int sampleLength, bpm;
     private long encodedFileSize;
-    private boolean showBeats = false;
     private InputStream musicStream;
     private Thread mp3ConvertThread;
     private View dlg;
@@ -96,7 +99,6 @@ public class SampleEditActivity extends AppCompatActivity {
     };
     private Context context;
     private int sampleId = -1;
-    private int numSlices = 1;
     private boolean isSliceMode = false;
     private boolean isDecoding = false;
     private boolean isGeneratingWaveForm = false;
@@ -140,6 +142,12 @@ public class SampleEditActivity extends AppCompatActivity {
         // Store reference to activity context to use inside event handlers
         context = this;
 
+        // Store reference to app preferences
+        appPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+        // Check for network
+        checkInternetConnection();
+
         Toolbar toolbar = (Toolbar)rootLayout.findViewById(R.id.my_toolbar);
         toolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
         toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
@@ -156,8 +164,7 @@ public class SampleEditActivity extends AppCompatActivity {
         firebaseAnalytics.logEvent("ACTIVITY_START", bundle);
 
         // Admob
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        if (prefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
             MobileAds.initialize(getApplicationContext(), getString(R.string.admob_id));
             AdView mAdView = (AdView) findViewById(R.id.adView);
             mAdView.setVisibility(View.VISIBLE);
@@ -226,9 +233,6 @@ public class SampleEditActivity extends AppCompatActivity {
         // If there is saved data, load it, otherwise determine the mode for the activity
         if (savedData != null) {
             loop = savedData.getLoop();
-            if (savedData.isSliceMode()) {
-                setSliceMode(savedData.getNumSlices());
-            }
             switch (savedData.getSelectionMode()) {
                 case AudioSampleView.BEAT_SELECTION_MODE:
                     beatEditActionMode = startSupportActionMode(beatEditActionModeCallback);
@@ -276,37 +280,6 @@ public class SampleEditActivity extends AppCompatActivity {
             });
         }
     }
-    private void LoadSampleFromIntent(Intent intent){
-        sampleView.setColor(intent.getIntExtra(LaunchPadActivity.COLOR, 0));
-        origSampleFile = new File(intent.getStringExtra(LaunchPadActivity.SAMPLE_PATH));
-        savedData.origSampleFile = origSampleFile;
-        if (origSampleFile.isFile() && origSampleFile.exists()){ // If a sample is being passed, load it and process
-            loadedSampleFile = new File(WAV_CACHE_FILE_PATH);
-            savedData.loadedSampleFile = loadedSampleFile;
-            try {
-                Utils.CopyFile(origSampleFile, loadedSampleFile);
-            }catch (IOException e){e.printStackTrace();}
-            LoadMediaPlayer(Uri.parse(WAV_CACHE_FILE_PATH));
-
-            rootLayout.post(new Runnable() {
-                @Override
-                public void run() {
-                    ActionBar actionBar = getSupportActionBar();
-                    if (actionBar != null){
-                        actionBar.setTitle(origSampleFile.getName());
-                    }
-                    sampleView.loadFile(WAV_CACHE_FILE_PATH);
-                    sampleView.redraw();
-                    updateInfoDisplay();
-                }
-            });
-        }
-
-    }
-    private void setSliceMode(int numSlices){
-        isSliceMode = true;
-        this.numSlices = numSlices;
-    }
     @Override
     protected void onResume(){
         super.onResume();
@@ -332,8 +305,6 @@ public class SampleEditActivity extends AppCompatActivity {
             stopPlayIndicatorThread = true;
             sampleView.saveAudioSampleData(savedData);
             savedData.setLoop(loop);
-            savedData.setNumSlices(numSlices);
-            savedData.setSliceMode(isSliceMode);
             savedData.setDecoding(isDecoding);
             savedData.setFullMusicUri(fullMusicUri);
             savedData.setGeneratingWaveForm(isGeneratingWaveForm);
@@ -351,6 +322,7 @@ public class SampleEditActivity extends AppCompatActivity {
     }
     @Override
     protected void onDestroy(){
+        unregisterNetworkListener();
         super.onDestroy();
 
     }
@@ -426,6 +398,101 @@ public class SampleEditActivity extends AppCompatActivity {
                 setResult(Activity.RESULT_CANCELED);
                 return super.onKeyDown(keycode, e);
         }
+    }
+
+    // Initialization
+    private SharedPreferences appPrefs;
+    private BroadcastReceiver br;
+    private void LoadSampleFromIntent(Intent intent){
+        sampleView.setColor(intent.getIntExtra(LaunchPadActivity.COLOR, 0));
+        origSampleFile = new File(intent.getStringExtra(LaunchPadActivity.SAMPLE_PATH));
+        savedData.origSampleFile = origSampleFile;
+        if (origSampleFile.isFile() && origSampleFile.exists()){ // If a sample is being passed, load it and process
+            loadedSampleFile = new File(WAV_CACHE_FILE_PATH);
+            savedData.loadedSampleFile = loadedSampleFile;
+            try {
+                Utils.CopyFile(origSampleFile, loadedSampleFile);
+            }catch (IOException e){e.printStackTrace();}
+            LoadMediaPlayer(Uri.parse(WAV_CACHE_FILE_PATH));
+
+            rootLayout.post(new Runnable() {
+                @Override
+                public void run() {
+                    ActionBar actionBar = getSupportActionBar();
+                    if (actionBar != null){
+                        actionBar.setTitle(origSampleFile.getName());
+                    }
+                    sampleView.loadFile(WAV_CACHE_FILE_PATH);
+                    sampleView.redraw();
+                    updateInfoDisplay();
+                }
+            });
+        }
+
+    }
+    private void checkInternetConnection() {
+        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true) && br == null) {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo netInfo = cm.getActiveNetworkInfo();
+            //should check null because in airplane mode it will be null
+            if (netInfo == null || !netInfo.isConnected()) disableApp();
+
+            br = new BroadcastReceiver() {
+
+                @Override
+                public void onReceive(Context context, Intent intent) {
+
+                    Bundle extras = intent.getExtras();
+
+                    NetworkInfo info = (NetworkInfo) extras
+                            .getParcelable("networkInfo");
+
+                    if (info != null) {
+                        NetworkInfo.State state = info.getState();
+
+                        if (state == NetworkInfo.State.CONNECTED) {
+                            enableApp();
+                            //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
+
+                        } else if(appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+                            disableApp();
+                            //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                        }
+                    }
+
+                }
+            };
+
+            final IntentFilter intentFilter = new IntentFilter();
+            intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+            registerReceiver((BroadcastReceiver) br, intentFilter);
+        }
+    }
+    private void unregisterNetworkListener(){
+        if (br != null)
+            unregisterReceiver(br);
+    }
+    private void disableApp(){
+        if (rootLayout.findViewById(R.id.no_network_overlay) == null) {
+            LayoutInflater inflater = getLayoutInflater();
+            View overlay = inflater.inflate(R.layout.no_network_overlay, null);
+            overlay.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    return true;
+                }
+            });
+            findViewById(R.id.adView).setVisibility(View.GONE);
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            overlay.setLayoutParams(params);
+            rootLayout.addView(overlay);
+        }
+    }
+    private void enableApp(){
+        View overlay = rootLayout.findViewById(R.id.no_network_overlay);
+        if (overlay != null)
+            rootLayout.removeView(overlay);
+        findViewById(R.id.adView).setVisibility(View.VISIBLE);
     }
 
     // New sample popup methods

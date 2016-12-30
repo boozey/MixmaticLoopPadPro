@@ -6,11 +6,13 @@ import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -26,6 +28,8 @@ import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.*;
 import android.os.Process;
 import android.preference.PreferenceManager;
@@ -223,6 +227,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     }
                     s.audioTrack.release();
                 }
+                unregisterNetworkListener();
             } else {
                 savedData.setSamples(samples);
                 savedData.setCounter(counter);
@@ -382,6 +387,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
 
     // Initialization methods
+    private BroadcastReceiver br;
     private void loadInBackground(){
         // Prepare shared preferences
         launchPadprefs = getPreferences(MODE_PRIVATE);
@@ -431,19 +437,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 sampleListAdapter.addAll(sampleFiles);
             }
         }).start();
-
-        // In-app billing init
-        String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
-        mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
-        mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
-            public void onIabSetupFinished(IabResult result) {
-                if (!result.isSuccess()) {
-                    // Oh no, there was a problem.
-                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
-                }
-                checkForUnconsumedPurchases();
-            }
-        });
 
         // Load UI
         runOnUiThread(new Runnable() {
@@ -537,6 +530,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
         // Initialize Ads
         initializeAds();
+
+        // Check for network connectivity
+        checkInternetConnection();
 
         if (savedData != null){
             samples = savedData.getSamples();
@@ -737,6 +733,70 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             }
         }
     }
+    private void checkInternetConnection() {
+        if (activityPrefs.getBoolean(SHOW_ADS, true) && br == null) {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo netInfo = cm.getActiveNetworkInfo();
+            //should check null because in airplane mode it will be null
+            if (netInfo == null || !netInfo.isConnected()) disableApp();
+
+            br = new BroadcastReceiver() {
+
+                @Override
+                public void onReceive(Context context, Intent intent) {
+
+                    Bundle extras = intent.getExtras();
+
+                    NetworkInfo info = (NetworkInfo) extras
+                            .getParcelable("networkInfo");
+
+                    if (info != null) {
+                        NetworkInfo.State state = info.getState();
+
+                        if (state == NetworkInfo.State.CONNECTED) {
+                            enableApp();
+                            initializeIAB();
+                            //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
+
+                        } else if(activityPrefs.getBoolean(SHOW_ADS, true)) {
+                            disableApp();
+                            //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                        }
+                    }
+
+                }
+            };
+
+            final IntentFilter intentFilter = new IntentFilter();
+            intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+            registerReceiver((BroadcastReceiver) br, intentFilter);
+        }
+    }
+    private void unregisterNetworkListener(){
+        if (br != null)
+            unregisterReceiver(br);
+    }
+    private void disableApp(){
+        if (rootLayout.findViewById(R.id.no_network_overlay) == null) {
+            LayoutInflater inflater = getLayoutInflater();
+            View overlay = inflater.inflate(R.layout.no_network_overlay, null);
+            overlay.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    return true;
+                }
+            });
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            overlay.setLayoutParams(params);
+            rootLayout.addView(overlay);
+            if (isPlaying || isRecording) stopPlayBack();
+        }
+    }
+    private void enableApp(){
+        View overlay = rootLayout.findViewById(R.id.no_network_overlay);
+        if (overlay != null)
+            rootLayout.removeView(overlay);
+    }
 
     // Touch pad helper methods
     private void preparePad(String path, int id, int color) {
@@ -827,11 +887,26 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         updatePadOverlay();
     }
     private void removeAllSamples(){
-        ArrayList<Integer> temp = (ArrayList<Integer>)activePads.clone();
-        for (int i : temp)
-            removeSample(i);
-        launchEvents = new ArrayList<>(20);
-        launchQueue = new ArrayList<>(5);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
+        builder.setMessage(R.string.clear_pads_prompt);
+        builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                ArrayList<Integer> temp = (ArrayList<Integer>)activePads.clone();
+                for (int i : temp)
+                    removeSample(i);
+                launchEvents = new ArrayList<>(20);
+                launchQueue = new ArrayList<>(5);
+            }
+        });
+        builder.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+
+            }
+        });
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
     private void notifySampleLoadError(Sample s){
         String error = getString(R.string.error_sample_load) + " " + new File(s.getPath()).getName();
@@ -1473,6 +1548,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
 
     // Sample Library Methods
+    private boolean hasLibShown = false;
     private class SampleListAdapter extends BaseAdapter {
         public ArrayList<File> sampleFiles;
         public ArrayList<String> sampleLengths;
@@ -1938,8 +2014,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
             ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
 
-            if (sampleListAdapter.getCount() < 1 && samplePackListAdapter.getCount() < 2) SamplePacksClick(null);
-
+            if (!hasLibShown && sampleListAdapter.getCount() < 1 && samplePackListAdapter.getCount() < 2) SamplePacksClick(null);
+            hasLibShown = true;
             // Start the animation
             AnimatorSet set = new AnimatorSet();
             ObjectAnimator slideLeft = ObjectAnimator.ofFloat(library, "TranslationX", sampleListView.getWidth(), 0);
@@ -2127,6 +2203,21 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             RSA_STRING_2 = "OIphIg9HycJRxBwGfgcpEQ3F47uWJ/UvmPeQ3cVffFKIb/cAUqCS4puEtcDL2yDXoKjagsJNBjbRWz6tqDvzH5BtvdYoy4QUf8NqH8wd3/2R/m3PAVIr+lRlUAc1Dj2y40uOEdluDW+i9kbkMD8vrLKr+DGnB7JrKFAPaqxBNTeogv",
             RSA_STRING_3 = "0vGNOWwJd3Tgx7VDm825Op/vyG9VQSM7W53TsyJE8NdwP8Q59B/WRlcsr+tHCyoQcjscrgVegiOyME1DfEUrQk/SPzr5AlCqa2AZ//wIDAQAB";
     private static final String SKU_REMOVE_ADS = "remove_ads";
+    private void initializeIAB(){
+        // In-app billing init
+        String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
+        mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
+        mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
+            public void onIabSetupFinished(IabResult result) {
+                if (!result.isSuccess()) {
+                    // Oh no, there was a problem.
+                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+                }
+                Log.d(LOG_TAG, "In-app billing initialized");
+                checkForUnconsumedPurchases();
+            }
+        });
+    }
     public void OpenStore(View v){
         Intent intent = new Intent(context, StoreActivity.class);
         startActivityForResult(intent, STORE_RESULT);
@@ -2151,6 +2242,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
     // Admob Advertising
     public static final String SHOW_ADS = "SHOW_ADS";
+    private static final String SHOW_REMOVE_ADS_PROMPT = "SHOW_REMOVE_ADS_PROMPT";
+    private boolean showRemoveAdsPrompt = true;
+
     private int interactionCount = 5;
     private InterstitialAd mInterstitialAd;
     private void initializeAds(){
@@ -2172,16 +2266,29 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             mInterstitialAd.setAdListener(new AdListener() {
                 @Override
                 public void onAdClosed() {
-                    Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), R.string.stop_ads_prompt, 5000);
-                    snackbar.setAction(R.string.yes, new View.OnClickListener() {
-                        @Override
-                        public void onClick(View view) {
-                            Intent intent = new Intent(context, StoreActivity.class);
-                            intent.putExtra(StoreActivity.SHOW_APP_EXTRAS, true);
-                            startActivityForResult(intent, STORE_RESULT);
-                        }
-                    });
-                    snackbar.show();
+                    if (activityPrefs.getBoolean(SHOW_REMOVE_ADS_PROMPT, true) && showRemoveAdsPrompt) {
+                        Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), R.string.stop_ads_prompt, 5000);
+                        snackbar.setAction(R.string.yes, new View.OnClickListener() {
+                            @Override
+                            public void onClick(View view) {
+                                SharedPreferences.Editor editor = activityPrefs.edit();
+                                editor.putBoolean(SHOW_REMOVE_ADS_PROMPT, false);
+                                editor.apply();
+                                Intent intent = new Intent(context, StoreActivity.class);
+                                intent.putExtra(StoreActivity.SHOW_APP_EXTRAS, true);
+                                startActivityForResult(intent, STORE_RESULT);
+                            }
+                        });
+                        snackbar.setCallback(new Snackbar.Callback() {
+                            @Override
+                            public void onDismissed(Snackbar snackbar, int event) {
+                                super.onDismissed(snackbar, event);
+                                showRemoveAdsPrompt = false;
+
+                            }
+                        });
+                        snackbar.show();
+                    }
                     requestNewInterstitial();
                 }
             });
@@ -2349,8 +2456,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     v.setActivated(true);
                     break;
                 case Sample.Q_NONE:
-                    s.play();
-                    v.setPressed(true);
+                    s.stop();
+                    v.setPressed(false);
                     launchEvents.add(new LaunchEvent(counter, LaunchEvent.PLAY_STOP, v.getId()));
                     break;
             }
@@ -3235,7 +3342,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED)
                     reloadAudioTrack();
 
-                audioTrack.setLoopPoints(0, sampleByteLength / 4, -1);
+                audioTrack.setLoopPoints(0, sampleByteLength / 4 + 1, -1);
                 audioTrack.setNotificationMarkerPosition(0);
                 audioTrack.setPlaybackPositionUpdateListener(null);
             }
