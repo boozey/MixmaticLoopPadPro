@@ -365,8 +365,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         switch (key){
             case ALWAYS_SHOW_SAMPLE_NAME_OVERLAY:
-                if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false))
+                if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false)) {
                     rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.VISIBLE);
+                    rootLayout.findViewById(R.id.edit_mode_overlay).setAlpha(1f);
+                }
                 else
                     rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.GONE);
                 break;
@@ -2349,7 +2351,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                             });
                         }
                     }
-                }, 5000, 5000);
+                }, 8000, 8000);
             }
             Sample s = samples.get(v.getId());
             switch (event.getAction()) {
@@ -2745,6 +2747,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     private void stopPlayBack(){
         isPlaying = false;
+        timeOutTimer.cancel();
+        timeOutTimer = null;
         MenuItem playButton = actionBarMenu.findItem(R.id.action_play);
         playButton.setIcon(R.drawable.ic_action_av_play_arrow);
         loopingSamplesPlaying = new ArrayList<>(5);
@@ -2765,7 +2769,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 s.stop();
             }
         }
-
 
         reconnectTouchListeners();
         isRecording = false;
