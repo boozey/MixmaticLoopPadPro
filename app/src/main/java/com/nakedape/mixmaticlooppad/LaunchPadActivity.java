@@ -14,6 +14,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
@@ -33,7 +34,7 @@ import android.net.NetworkInfo;
 import android.os.*;
 import android.os.Process;
 import android.preference.PreferenceManager;
-import android.support.annotation.IntegerRes;
+import android.support.annotation.Nullable;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AlertDialog;
@@ -55,6 +56,8 @@ import android.view.animation.AnticipateOvershootInterpolator;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.BaseExpandableListAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ExpandableListView;
 import android.widget.ImageView;
@@ -79,8 +82,10 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -110,6 +115,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public static String LAUNCHMODE = "com.nakedape.mixmaticlooppad.launchmode";
     public static String SAMPLE_VOLUME = "com.nakedape.mixmaticlooppad.volume";
     public static String QUANTIZE_MODE = "com.nakedape.mixmaticlooppad.quantize_mode";
+    public static String IS_ASSET_FILE = "com.nakedape.mixmaticlooppad.is_asset_file";
+    public static String IS_FIRST_RUN = "com.nakedape.mismaticlooppad.is_first_run";
     private static int GET_SAMPLE = 0;
 
     private boolean isEditMode = false;
@@ -149,11 +156,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             R.id.touchPad13, R.id.touchPad14, R.id.touchPad15, R.id.touchPad16, R.id.touchPad17, R.id.touchPad18,
             R.id.touchPad19, R.id.touchPad20, R.id.touchPad21, R.id.touchPad22, R.id.touchPad23, R.id.touchPad24};
     private Menu actionBarMenu;
-    private boolean isSampleLibraryShowing = false;
-    private SampleListAdapter sampleListAdapter;
-    private SamplePackListAdapter samplePackListAdapter;
-    private int sampleLibraryIndex = -1;
-    private MediaPlayer samplePlayer;
     private Runtime runtime;
 
     // Activity overrides
@@ -216,6 +218,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 progressDialog.cancel();
         stopCounterThread = true;
         stopPlaybackThread = true;
+        unregisterNetworkListener();
         if (rootLayout != null) {
             if (isFinishing()) {
                 // Release audiotrack resources
@@ -227,7 +230,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     }
                     s.audioTrack.release();
                 }
-                unregisterNetworkListener();
             } else {
                 savedData.setSamples(samples);
                 savedData.setCounter(counter);
@@ -273,6 +275,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 if (!isEditMode) {
                     isRecording = false;
                     gotoEditMode();
+                    showTipPopup(TIP_EDIT_MODE_1);
                 } else {
                     gotoPlayMode();
                 }
@@ -303,6 +306,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 return true;
             case R.id.action_clear_pads:
                 removeAllSamples();
+                return true;
+            case R.id.action_reset_demo:
+                resetDemo();
                 return true;
         }
         return super.onOptionsItemSelected(item);
@@ -348,6 +354,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public boolean onKeyDown(int keycode, KeyEvent e) {
         switch (keycode) {
             case KeyEvent.KEYCODE_BACK:
+                if (rootLayout.findViewById(R.id.tutorial_popup) != null){
+                    hideTipPopup();
+                    return true;
+                }
                 if (isSampleLibraryShowing){
                     hideSampleLibrary();
                     return true;
@@ -385,11 +395,16 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     ((TextView)getSupportActionBar().getCustomView().findViewById(R.id.time_sig_view)).setText(getString(R.string.time_sig_display,
                             timeSignature));
                 break;
+            case SHOW_TIPS:
+                resetTipPrefs();
+                break;
         }
     }
 
     // Initialization methods
+    public static final String STARTER_PACK_NAME = "HLS_128bpm_Baby_A#";
     private BroadcastReceiver br;
+    private boolean isFirstRun = false;
     private void loadInBackground(){
         // Prepare shared preferences
         launchPadprefs = getPreferences(MODE_PRIVATE);
@@ -523,7 +538,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             actionBar.setCustomView(R.layout.counter_bar);
             actionBar.setDisplayShowCustomEnabled(true);
             counterTextView = (TextView)actionBar.getCustomView().findViewById(R.id.counter_view);
-            bpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 120);
+            bpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 128);
             ((TextView)actionBar.getCustomView().findViewById(R.id.bpm_view)).setText(getString(R.string.bpm_display, bpm));
             timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
             updateCounterMessage();
@@ -566,7 +581,18 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    setupPadsFromFile();
+                    isFirstRun = true;//activityPrefs.getBoolean(IS_FIRST_RUN, true);
+                    if (isFirstRun) {
+                        interactionCount = 0;
+                        setupPadsFromAssets();
+                        loadDemo();
+                        SharedPreferences.Editor editor = activityPrefs.edit();
+                        editor.putBoolean(IS_FIRST_RUN, false);
+                        editor.apply();
+                    }
+                    else
+                        setupPadsFromFile();
+
                     // Prepare Sample Library list adapter
                     File[] sampleFiles = sampleDirectory.listFiles(new FileFilter() {
                         @Override
@@ -578,9 +604,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         @Override
                         public void run() {
                             updatePadOverlay();
+                            if (isFirstRun) playMix();
                         }
                     });
-                    //sampleListAdapter.addAll(sampleNames);
                 }
             }).start();
         }
@@ -649,43 +675,47 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         int padInt = 1;
         for (int id : touchPadIds){
             final TouchPad pad = (TouchPad)findViewById(id);
-            pad.setTag(String.valueOf(padInt++));
+            String padNumber = String.valueOf(padInt++);
+            pad.setTag(padNumber);
             pad.setOnTouchListener(TouchPadTouchListener);
             pad.setOnDragListener(new PadDragEventListener());
-            String path = launchPadprefs.getString(pad.getTag().toString() + SAMPLE_PATH, null);
+            String path = launchPadprefs.getString(padNumber + SAMPLE_PATH, null);
             if (path != null) {
+                Sample s = null;
                 File sampleFile = new File(path);
-                if (sampleFile.isFile()) {
+                // Determine whether or not the file is an asset
+                if (sampleFile.isFile() && sampleFile.exists()) {
+                    s = new Sample(path, id);
+                } else if (launchPadprefs.getBoolean(padNumber + IS_ASSET_FILE, false)) {
+                    s = new Sample(path, id, true);
+                }
+                if (s != null && s.isReady()) {
                     // Configure pad settings
                     pad.setOnTouchListener(TouchPadTouchListener);
-                    Sample s = new Sample(path, id);
-                    if (s.isReady()) {
-                        s.setOnPlayFinishedListener(samplePlayListener);
-                        samples.put(id, s);
-                        String padNumber = (String) pad.getTag();
-                        s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, false));
-                        s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER));
-                        s.setVolume(launchPadprefs.getFloat(padNumber + SAMPLE_VOLUME, 0.5f * AudioTrack.getMaxVolume()));
-                        s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE));
-                        final int color = launchPadprefs.getInt(padNumber + COLOR, 0);
-                        activePads.add(pad.getId());
-                        // Animate the loading of the pad
-                        rootLayout.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                setPadColor(color, pad);
-                                // Start the animation
-                                AnimatorSet set = new AnimatorSet();
-                                ObjectAnimator popIn = ObjectAnimator.ofFloat(pad, "ScaleX", 0f, 1f);
-                                set.setInterpolator(new AnticipateOvershootInterpolator());
-                                set.play(popIn);
-                                set.setTarget(pad);
-                                set.start();
-                            }
-                        });
-                    } else {
-                        notifySampleLoadError(s);
-                    }
+                    s.setOnPlayFinishedListener(samplePlayListener);
+                    samples.put(id, s);
+                    s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, false));
+                    s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER));
+                    s.setVolume(launchPadprefs.getFloat(padNumber + SAMPLE_VOLUME, 0.5f * AudioTrack.getMaxVolume()));
+                    s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE));
+                    final int color = launchPadprefs.getInt(padNumber + COLOR, 0);
+                    activePads.add(pad.getId());
+                    // Animate the loading of the pad
+                    rootLayout.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            setPadColor(color, pad);
+                            // Start the animation
+                            AnimatorSet set = new AnimatorSet();
+                            ObjectAnimator popIn = ObjectAnimator.ofFloat(pad, "ScaleX", 0f, 1f);
+                            set.setInterpolator(new AnticipateOvershootInterpolator());
+                            set.play(popIn);
+                            set.setTarget(pad);
+                            set.start();
+                        }
+                    });
+                } else {
+                    notifySampleLoadError(s);
                 }
             } else {
                 pad.setOnLongClickListener(new View.OnLongClickListener() {
@@ -799,6 +829,286 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         if (overlay != null)
             rootLayout.removeView(overlay);
     }
+    private void setupPadsFromAssets(){
+        SharedPreferences.Editor prefEditor = launchPadprefs.edit();
+        samples = new SparseArray<>(24);
+        activePads = new ArrayList<>(24);
+        int padInt = 1;
+        String padNumber;
+        for (int id : touchPadIds) {
+            final TouchPad pad = (TouchPad) findViewById(id);
+            padNumber = String.valueOf(padInt++);
+            pad.setTag(padNumber);
+            pad.setOnTouchListener(TouchPadTouchListener);
+            pad.setOnDragListener(new PadDragEventListener());
+            Sample s = null;
+            switch (padNumber){
+                case "4":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop 1.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop 1.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 1); // Red
+                        prefEditor.commit();
+                    }
+                    break;
+                case "8":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop 2.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop 2.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, false);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 1); // Red
+                        prefEditor.commit();
+                    }
+                    break;
+                case "12":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Synth.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Synth.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 1); // Red
+                        prefEditor.commit();
+                    }
+                    break;
+                case "3":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop_(No sidechain)_01.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop_(No sidechain)_01.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 2); // Green
+                        prefEditor.commit();
+                    }
+                    break;
+                case "7":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop_(No sidechain)_02.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Drop_(No sidechain)_02.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, false);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 2); // Green
+                        prefEditor.commit();
+                    }
+                    break;
+                case "11":
+                    s = new Sample("HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Snare.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Snare.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, false);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "15":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Synth.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Synth.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 2); // Green
+                        prefEditor.commit();
+                    }
+                    break;
+                case "19":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Drop 2.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Drop 2.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 2); // Green
+                        prefEditor.commit();
+                    }
+                    break;
+                case "23":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Drop 1.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Drop 1.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 2); // Green
+                        prefEditor.commit();
+                    }
+                    break;
+                case "2":
+                    s = new Sample("HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Clap.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Clap.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "6":
+                    s = new Sample("HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Ride.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Ride.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "10":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Vox 1.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Vox 1.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, false);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BEAT);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 3); // Orange
+                        prefEditor.commit();
+                    }
+                    break;
+                case "14":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Clap.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Clap.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "18":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Snare.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Snare.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "22":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Ride.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Ride.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "1":
+                    s = new Sample("HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Kick.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Drum Loops/HLS_128bpm_Baby_Kick.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+                case "9":
+                    s = new Sample("HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Vox 2.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Melody Loops/HLS_128bpm_Baby_Vox 2.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, false);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BEAT);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER);
+                        prefEditor.putInt(padNumber + COLOR, 3); // Orange
+                        prefEditor.commit();
+                    }
+                    break;
+                case "13":
+                    s = new Sample("HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Kick.wav", id, true);
+                    if (s.isReady()) {
+                        prefEditor.putString(padNumber + SAMPLE_PATH, "HLS_128bpm_Baby_A#/Oneshots/HLS_128bpm_Baby_Oneshot_Kick.wav");
+                        prefEditor.putBoolean(padNumber + IS_ASSET_FILE, true);
+                        prefEditor.putBoolean(padNumber + LOOPMODE, true);
+                        prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
+                        prefEditor.putInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_GATE);
+                        prefEditor.putInt(padNumber + COLOR, 0); // Blue
+                        prefEditor.commit();
+                    }
+                    break;
+            }
+            if (s != null && s.isReady()){
+                s.setOnPlayFinishedListener(samplePlayListener);
+                samples.put(id, s);
+                s.setLoopMode(launchPadprefs.getBoolean(padNumber + LOOPMODE, false));
+                s.setLaunchMode(launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER));
+                s.setVolume(launchPadprefs.getFloat(padNumber + SAMPLE_VOLUME, 0.5f * AudioTrack.getMaxVolume()));
+                s.setQuantizationMode(launchPadprefs.getInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE));
+                final int color = launchPadprefs.getInt(padNumber + COLOR, 0);
+                activePads.add(pad.getId());
+                // Animate the loading of the pad
+                rootLayout.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        setPadColor(color, pad);
+                        // Start the animation
+                        AnimatorSet set = new AnimatorSet();
+                        ObjectAnimator popIn = ObjectAnimator.ofFloat(pad, "ScaleX", 0f, 1f);
+                        set.setInterpolator(new AnticipateOvershootInterpolator());
+                        set.play(popIn);
+                        set.setTarget(pad);
+                        set.start();
+                    }
+                });
+            }
+        }
+    }
+    private void resetDemo(){
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.MyAlertDialogStyle);
+        builder.setMessage(R.string.reset_demo_prompt);
+        builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                ArrayList<Integer> temp = (ArrayList<Integer>)activePads.clone();
+                for (int i : temp)
+                    removeSample(i);
+                launchEvents = new ArrayList<>(20);
+                launchQueue = new ArrayList<>(5);
+                setupPadsFromAssets();
+            }
+        });
+        builder.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+
+            }
+        });
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
 
     // Touch pad helper methods
     private void preparePad(String path, int id, int color) {
@@ -885,6 +1195,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         editor.remove(padNumber + LAUNCHMODE);
         editor.remove(padNumber + LOOPMODE);
         editor.remove(padNumber + COLOR);
+        editor.remove(padNumber + IS_ASSET_FILE);
         editor.apply();
         updatePadOverlay();
     }
@@ -1110,7 +1421,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         swapPads(pad1Id, v.getId());
                         resetRecording();
                     } else if (data.getDescription().getLabel().equals(SAMPLE_PATH)){
-                        loadPadFromDrop(data.getItemAt(0).getText().toString(), v.getId(), Integer.parseInt(data.getItemAt(1).getText().toString()));
+                        loadPadFromDrop(data.getItemAt(0).getText().toString(), v.getId(), Integer.parseInt(data.getItemAt(1).getText().toString()), false);
+                    } else if (data.getDescription().getLabel().equals("ASSET")){
+                        loadPadFromDrop(data.getItemAt(0).getText().toString(), v.getId(), Integer.parseInt(data.getItemAt(1).getText().toString()), true);
                     }
                     return true;
                 default:
@@ -1137,6 +1450,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         samples.put(pad2Id, sample1);
         SharedPreferences.Editor editor = launchPadprefs.edit();
         editor.putString(pad2Number + SAMPLE_PATH, sample1.getPath());
+        editor.putBoolean(pad2Number + IS_ASSET_FILE, sample1.isAssetFile);
         editor.putInt(pad2Number + LAUNCHMODE, sample1.getLaunchMode());
         editor.putBoolean(pad2Number + LOOPMODE, sample1.getLoopMode());
         editor.putFloat(pad2Number + SAMPLE_VOLUME, sample1.getVolume());
@@ -1150,6 +1464,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             sample2.id = pad1Id;
             samples.put(pad1Id, sample2);
             editor.putString(pad1Number + SAMPLE_PATH, sample2.getPath());
+            editor.putBoolean(pad1Number + IS_ASSET_FILE, sample2.isAssetFile);
             editor.putInt(pad1Number + LAUNCHMODE, sample2.getLaunchMode());
             editor.putBoolean(pad1Number + LOOPMODE, sample2.getLoopMode());
             editor.putFloat(pad1Number + SAMPLE_VOLUME, sample2.getVolume());
@@ -1162,6 +1477,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             pad1.setBackgroundResource(R.drawable.launch_pad_empty);
             pad1.setOnLongClickListener(null);
             editor.remove(pad1Number + SAMPLE_PATH);
+            editor.remove(pad1Number + IS_ASSET_FILE);
             editor.remove(pad1Number + LAUNCHMODE);
             editor.remove(pad1Number + LOOPMODE);
             editor.remove(pad1Number + SAMPLE_VOLUME);
@@ -1171,18 +1487,19 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         updatePadOverlay();
         pad2.callOnClick();
     }
-    private void loadPadFromDrop(String path, int padId, int color){
+    private void loadPadFromDrop(String path, int padId, int color, boolean isAsset){
         TouchPad pad = (TouchPad)findViewById(padId);
         SharedPreferences.Editor editor = launchPadprefs.edit();
         if (activePads.contains((Integer)padId)) {
             samples.get(padId).release();
             samples.remove(padId);
         }
-        Sample sample = new Sample(path, padId);
+        Sample sample = new Sample(path, padId, isAsset);
         if (sample.isReady()) {
             activePads.add(padId);
             editor.putInt(pad.getTag().toString() + COLOR, color);
             editor.putString(pad.getTag().toString() + SAMPLE_PATH, path);
+            editor.putBoolean(pad.getTag().toString() + IS_ASSET_FILE, isAsset);
             int launchMode = Integer.valueOf(activityPrefs.getString(PREF_LAUNCH_MODE, String.valueOf(Sample.LAUNCHMODE_TRIGGER)));
             editor.putInt(pad.getTag().toString() + LAUNCHMODE, launchMode);
             editor.putBoolean(pad.getTag().toString() + LOOPMODE, activityPrefs.getBoolean(PREF_LOOP_MODE, false));
@@ -1201,6 +1518,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             });
             pad.callOnClick();
             setBpm(path);
+            showTipPopup(TIP_PAD_DEFAULTS);
         } else {
             notifySampleLoadError(sample);
         }
@@ -1550,7 +1868,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
 
     // Sample Library Methods
+    private boolean isSampleLibraryShowing = false;
+    private SampleListAdapter sampleListAdapter;
+    private SamplePackListAdapter samplePackListAdapter;
+    private int sampleLibraryIndex = -1;
+    private MediaPlayer samplePlayer;
     private boolean hasLibShown = false;
+
     private class SampleListAdapter extends BaseAdapter {
         public ArrayList<File> sampleFiles;
         public ArrayList<String> sampleLengths;
@@ -1670,7 +1994,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
         private ArrayList<String> titles;
-        private ArrayList<String> genres;
+        private ArrayList<String> tempos;
         private ArrayList<Bitmap> images;
         private Context mContext;
         private int resource_id;
@@ -1682,11 +2006,20 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             mInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             names = new ArrayList<>();
             titles = new ArrayList<>();
-            genres = new ArrayList<>();
+            tempos = new ArrayList<>();
             images = new ArrayList<>();
         }
 
         private void refresh(){
+            // Add in starter pack data
+            if (!names.contains(STARTER_PACK_NAME)) {
+                names.add(STARTER_PACK_NAME);
+                titles.add("Hall Samples Baby A#");
+                tempos.add("128bpm");
+                images.add(BitmapFactory.decodeResource(getResources(), R.drawable.hls_128bpm_baby_a));
+            }
+
+            // Add in downloaded packs
             if (samplePackDirectory.exists()) {
                 File[] packFolders = samplePackDirectory.listFiles();
                 for (File folder : packFolders) {
@@ -1695,14 +2028,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         try {
                             BufferedReader br = new BufferedReader(new FileReader(new File(folder, folder.getName() + ".txt")));
                             titles.add(br.readLine());
-                            genres.add(br.readLine());
+                            tempos.add(br.readLine());
                             br.close();
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    notifyDataSetChanged();
-                                }
-                            });
                         } catch (IOException e) {
                             //You'll need to add proper error handling here
                             e.printStackTrace();
@@ -1715,6 +2042,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     }
                 }
             }
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    notifyDataSetChanged();
+                }
+            });
         }
 
         @Override
@@ -1744,7 +2078,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             titleView.setText(titles.get(position));
 
             TextView genreView = (TextView)convertView.findViewById(R.id.genre_view);
-            genreView.setText(genres.get(position));
+            genreView.setText(tempos.get(position));
 
             ImageView imageView = (ImageView)convertView.findViewById(R.id.image_view);
             imageView.setImageBitmap(images.get(position));
@@ -1759,7 +2093,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     titleView.setText(titles.get(position));
 
                     TextView genreView = (TextView) selectedView.findViewById(R.id.genre_view);
-                    genreView.setText(genres.get(position));
+                    genreView.setText(tempos.get(position));
 
                     ImageView imageView = (ImageView) selectedView.findViewById(R.id.image_view);
                     imageView.setImageBitmap(images.get(position));
@@ -1795,6 +2129,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         private HashMap<String, ArrayList<String>> fileNames;
         private String samplePackName;
         private View currentlyPlayingButton, previousView;
+        private boolean isAssetPack = false;
 
         public SamplePackFilesListAdapter(Context context, int groupResourceId, int childResourceId){
             this.context = context;
@@ -1806,17 +2141,48 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
         private void loadPack(String name){
             samplePackName = name;
-            File sampleFolder = new File(samplePackDirectory, name);
-            if (sampleFolder.exists() && sampleFolder.isDirectory()){
-                for (File folder : sampleFolder.listFiles()){
-                    if (folder.isDirectory()) {
-                        folderNames.add(folder.getName());
-                        ArrayList<String> names = new ArrayList<>(Arrays.asList(folder.list()));
-                        fileNames.put(folder.getName(), names);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    if (samplePackName.equals(STARTER_PACK_NAME)){
+                        try {
+                            isAssetPack = true;
+                            folderNames = new ArrayList<>(Arrays.asList(getAssets().list(STARTER_PACK_NAME)));
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    notifyDataSetChanged();
+                                }
+                            });
+                            for (String folder : folderNames){
+                                fileNames.put(folder, new ArrayList<>(Arrays.asList(getAssets().list(STARTER_PACK_NAME + "/" + folder))));
+                            }
+                        } catch (IOException e){
+                            e.printStackTrace();
+                        }
+                    } else {
+                        File sampleFolder = new File(samplePackDirectory, samplePackName);
+                        if (sampleFolder.exists() && sampleFolder.isDirectory()) {
+                            for (File folder : sampleFolder.listFiles()) {
+                                if (folder.isDirectory()) {
+                                    folderNames.add(folder.getName());
+                                    ArrayList<String> names = new ArrayList<>(Arrays.asList(folder.list()));
+                                    fileNames.put(folder.getName(), names);
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            notifyDataSetChanged();
+                                        }
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
-                notifyDataSetChanged();
-            }
+            }).start();
+        }
+        public boolean isAssetPack(){
+            return isAssetPack;
         }
 
         @Override
@@ -1832,8 +2198,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         @Override
         public String getChild(int groupPosition, int childPosititon) {
             String folderName = folderNames.get(groupPosition);
-            String path = samplePackDirectory.getAbsolutePath() + "/" + samplePackName + "/" + folderName + "/" + fileNames.get(folderName).get(childPosititon);
-            return path;
+            String fileName = fileNames.get(folderName).get(childPosititon);
+            if (isAssetPack){
+                return samplePackName + "/" + folderName + "/" + fileName;
+            } else {
+                return samplePackDirectory.getAbsolutePath() + "/" + samplePackName + "/" + folderName + "/" + fileName;
+            }
         }
 
         @Override
@@ -1880,7 +2250,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         }
                         samplePlayer = new MediaPlayer();
                         try {
-                            samplePlayer.setDataSource(getChild(groupPosition, childPosition));
+                            if (isAssetPack) {
+                                AssetFileDescriptor afd = getAssets().openFd(getChild(groupPosition, childPosition));
+                                samplePlayer.setDataSource(afd.getFileDescriptor(),afd.getStartOffset(),afd.getLength());
+                            }
+                            else
+                                samplePlayer.setDataSource(getChild(groupPosition, childPosition));
                             samplePlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
                                 @Override
                                 public void onCompletion(MediaPlayer mp) {
@@ -1898,13 +2273,18 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             });
 
             ImageView editButton = (ImageView)convertView.findViewById(R.id.item_edit_icon);
-            editButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if (v.isActivated() || v.isSelected())
-                        samplePackListItemEditClick(getChild(groupPosition, childPosition));
-                }
-            });
+            if (isAssetPack)
+                editButton.setVisibility(View.GONE);
+            else {
+                editButton.setVisibility(View.VISIBLE);
+                editButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (v.isActivated() || v.isSelected())
+                            samplePackListItemEditClick(getChild(groupPosition, childPosition));
+                    }
+                });
+            }
 
             convertView.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -1926,7 +2306,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     // Start drag
                     ClipData.Item pathItem = new ClipData.Item(getChild(groupPosition, childPosition));
                     String[] mime_type = {ClipDescription.MIMETYPE_TEXT_PLAIN};
-                    ClipData dragData = new ClipData(SAMPLE_PATH, mime_type, pathItem);
+                    ClipData dragData = null;
+                    if (isAssetPack) {
+                        dragData = new ClipData("ASSET", mime_type, pathItem);
+                    } else {
+                        dragData = new ClipData(SAMPLE_PATH, mime_type, pathItem);
+                    }
                     Drawable drawable = AppCompatResources.getDrawable(context, padColorDrawables[groupPosition % 4]);
                     dragData.addItem(new ClipData.Item(String.valueOf(groupPosition % 4)));
                     View.DragShadowBuilder myShadow = new SampleDragShadowBuilder(v, drawable);
@@ -1996,6 +2381,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             }
         }
     }
+
     public void SampleLibTabClick(View v){
         if (isSampleLibraryShowing) {
             hideSampleLibrary();
@@ -2012,6 +2398,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     private void showSampleLibrary(){
         if (!isSampleLibraryShowing) {
+            isSampleLibraryShowing = true;
             if (!isEditMode) gotoEditMode();
             final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
             ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
@@ -2032,7 +2419,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    isSampleLibraryShowing = true;
+                    showTipPopup(TIP_LIBRARY_1);
                 }
 
                 @Override
@@ -2345,8 +2732,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                                 @Override
                                 public void run() {
                                     stopPlayBack();
-                                    timeOutTimer.cancel();
-                                    timeOutTimer = null;
                                 }
                             });
                         }
@@ -2600,25 +2985,27 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     @Override
                     public void run() {
                         updateCounterMessage();
-                        ArrayList<LaunchEvent> tempQueue = (ArrayList<LaunchEvent>)launchQueue.clone();
-                        for (LaunchEvent event : tempQueue){
-                            if (counter >= event.getTimeStamp()) {
-                                switch (event.getEventType()) {
-                                    case LaunchEvent.PLAY_START:
-                                    samples.get(event.sampleId).play();
-                                    rootLayout.findViewById(event.sampleId).setPressed(true);
-                                    rootLayout.findViewById(event.sampleId).setActivated(false);
-                                    launchQueue.remove(event);
-                                        break;
-                                    case LaunchEvent.PLAY_STOP:
-                                        samples.get(event.sampleId).stop();
-                                        rootLayout.findViewById(event.sampleId).setPressed(false);
-                                        rootLayout.findViewById(event.sampleId).setActivated(false);
-                                        launchQueue.remove(event);
-                                        break;
+                        if (isRecording) {
+                            ArrayList<LaunchEvent> tempQueue = (ArrayList<LaunchEvent>) launchQueue.clone();
+                            for (LaunchEvent event : tempQueue) {
+                                if (counter >= event.getTimeStamp()) {
+                                    switch (event.getEventType()) {
+                                        case LaunchEvent.PLAY_START:
+                                            samples.get(event.sampleId).play();
+                                            rootLayout.findViewById(event.sampleId).setPressed(true);
+                                            rootLayout.findViewById(event.sampleId).setActivated(false);
+                                            launchQueue.remove(event);
+                                            break;
+                                        case LaunchEvent.PLAY_STOP:
+                                            samples.get(event.sampleId).stop();
+                                            rootLayout.findViewById(event.sampleId).setPressed(false);
+                                            rootLayout.findViewById(event.sampleId).setActivated(false);
+                                            launchQueue.remove(event);
+                                            break;
+                                    }
                                 }
-                            }
 
+                            }
                         }
                     }
                 });
@@ -2698,6 +3085,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                             MenuItem item = actionBarMenu.findItem(R.id.action_play);
                             item.setIcon(R.drawable.ic_action_av_play_arrow);
                         }
+                        showTipPopup(TIP_WELCOME);
+                        showTipPopup(TIP_START_EDIT_MODE);
                     }
                 });
             }
@@ -2707,6 +3096,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         if (launchEvents.size() > 0) {
             disconnectTouchListeners();
             isRecording = false;
+            actionBarMenu.findItem(R.id.action_play).setIcon(R.drawable.ic_action_av_pause);
             new Thread(new playBackRecording()).start();
         }
     }
@@ -2747,8 +3137,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     private void stopPlayBack(){
         isPlaying = false;
-        timeOutTimer.cancel();
-        timeOutTimer = null;
+        if (timeOutTimer != null) {
+            timeOutTimer.cancel();
+            timeOutTimer = null;
+        }
         MenuItem playButton = actionBarMenu.findItem(R.id.action_play);
         playButton.setIcon(R.drawable.ic_action_av_play_arrow);
         loopingSamplesPlaying = new ArrayList<>(5);
@@ -2770,8 +3162,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             }
         }
 
+        exportLaunchEvents();
         reconnectTouchListeners();
         isRecording = false;
+        showTipPopup(TIP_WELCOME);
+        if (!isSampleLibraryShowing)
+            showTipPopup(TIP_START_EDIT_MODE);
     }
     public void PlayButtonClick(View v){
         if (isPlaying || isRecording) {
@@ -2799,7 +3195,227 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         stopPlayBack();
     }
 
-    // File save/export methods
+    // Tutorial
+    private static final String TIP_WELCOME = "TIP_WELCOME";
+    private static final String SHOW_TIPS = "SHOW_TIPS";
+    private static final String TIP_START_EDIT_MODE = "TIP_START_EDIT_MODE";
+    private static final String TIP_OPEN_LIB = "TIP_OPEN_LIB";
+    private static final String TIP_EDIT_MODE_1 = "TIP_EDIT_MODE_1";
+    private static final String TIP_PAD_DEFAULTS = "TIP_PAD_DEFAULTS";
+    private static final String TIP_DRAG = "TIP_DRAG";
+    private static final String TIP_LIBRARY_1 = "TIP_LIBRARY_1";
+    private static final String TIP_LIBRARY_2 = "TIP_LIBRARY_2";
+    private static final String TIP_LIBRARY_3 = "TIP_LIBRARY_3";
+    private static final String TIP_LIBRARY_4 = "TIP_LIBRARY_4";
+
+    private void showTipPopup(String which){
+        if (activityPrefs.getBoolean(SHOW_TIPS, true)) {
+            switch (which) {
+                case TIP_WELCOME:
+                    if (activityPrefs.getBoolean(TIP_WELCOME, true))
+                        showTipPopup(TIP_WELCOME, R.string.welcome_message, R.string.got_it, R.drawable.ic_app_icon, null);
+                    break;
+                case TIP_START_EDIT_MODE:
+                    if (!activityPrefs.getBoolean(TIP_WELCOME, true) && activityPrefs.getBoolean(TIP_EDIT_MODE_1, true)&& activityPrefs.getBoolean(TIP_START_EDIT_MODE, true))
+                        showTipPopup(TIP_START_EDIT_MODE, R.string.start_edit_mode_tip, R.string.next, R.drawable.ic_gear_150dp, TIP_OPEN_LIB);
+                    break;
+                case TIP_OPEN_LIB:
+                    if (activityPrefs.getBoolean(TIP_OPEN_LIB, true))
+                        showTipPopup(TIP_OPEN_LIB, R.string.open_library_tip, R.string.got_it, R.drawable.ic_gear_150dp, null);
+                    break;
+                case TIP_EDIT_MODE_1:
+                    if (activityPrefs.getBoolean(TIP_EDIT_MODE_1, true))
+                        showTipPopup(TIP_EDIT_MODE_1, R.string.edit_mode_tip_1, R.string.next, R.drawable.ic_tool_bar_tip, TIP_DRAG);
+                    break;
+                case TIP_PAD_DEFAULTS:
+                    if (activityPrefs.getBoolean(TIP_PAD_DEFAULTS, true))
+                        showTipPopup(TIP_PAD_DEFAULTS, R.string.edit_mode_tip_2, R.string.got_it, R.drawable.ic_tool_bar_tip, null);
+                    break;
+                case TIP_DRAG:
+                    if (activityPrefs.getBoolean(TIP_DRAG, true))
+                        showTipPopup(TIP_DRAG, R.string.drag_tip, R.string.got_it, R.drawable.ic_drag_tip, null);
+                    break;
+                case TIP_LIBRARY_1:
+                    if (activityPrefs.getBoolean(TIP_LIBRARY_1, true))
+                        showTipPopup(TIP_LIBRARY_1, R.string.library_tip_1, R.string.next, R.drawable.ic_library_tip_1, TIP_LIBRARY_2);
+                    break;
+                case TIP_LIBRARY_2:
+                    if (activityPrefs.getBoolean(TIP_LIBRARY_2, true))
+                        showTipPopup(TIP_LIBRARY_2, R.string.library_tip_2, R.string.next, R.drawable.ic_library_tip_2, TIP_LIBRARY_3);
+                    break;
+                case TIP_LIBRARY_3:
+                    if (activityPrefs.getBoolean(TIP_LIBRARY_3, true))
+                        showTipPopup(TIP_LIBRARY_3, R.string.library_tip_3, R.string.next, R.drawable.ic_library_tip_3, TIP_LIBRARY_4);
+                    break;
+                case TIP_LIBRARY_4:
+                    if (activityPrefs.getBoolean(TIP_LIBRARY_4, true)) {
+                        if (activityPrefs.getBoolean(TIP_EDIT_MODE_1, true))
+                            showTipPopup(TIP_LIBRARY_4, R.string.library_tip_4, R.string.next, R.drawable.ic_library_tip_4, TIP_EDIT_MODE_1);
+                        else
+                            showTipPopup(TIP_LIBRARY_4, R.string.library_tip_4, R.string.got_it, R.drawable.ic_library_tip_4, null);
+                    }
+                    break;
+            }
+        }
+    }
+    private void showTipPopup(final String tip, int msgId, int buttonTextId, int imageId, @Nullable final String nextTip){
+        View popup = rootLayout.findViewById(R.id.tutorial_popup);
+        Log.d(LOG_TAG, tip);
+        if (popup == null) {
+            LayoutInflater inflater = getLayoutInflater();
+            popup = inflater.inflate(R.layout.tutorial_popup, null);
+            popup.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    return true;
+                }
+            });
+        }
+
+        TextView textView = (TextView)popup.findViewById(R.id.textView);
+        textView.setText(msgId);
+
+        final CheckBox checkbox = (CheckBox)popup.findViewById(R.id.checkbox);
+
+        Button button = (Button)popup.findViewById(R.id.yes_button);
+        button.setText(buttonTextId);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                SharedPreferences.Editor prefEditor = activityPrefs.edit();
+                prefEditor.putBoolean(tip, false);
+                if (checkbox.isChecked()){
+                    prefEditor.putBoolean(SHOW_TIPS, false);
+                }
+                prefEditor.apply();
+
+                if (!checkbox.isChecked() && nextTip != null){
+                    showTipPopup(nextTip);
+                }
+                else {
+                    hideTipPopup();
+                }
+            }
+        });
+
+        ImageView imageView = (ImageView)popup.findViewById(R.id.imageView);
+        imageView.setImageResource(imageId);
+
+        if (rootLayout.findViewById(R.id.tutorial_popup) == null) {
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            rootLayout.addView(popup, params);
+
+            // Start the animation
+            AnimatorSet set = Animations.slideUp(popup, 200, 0, rootLayout.getHeight() / 3);
+            set.start();
+        }
+    }
+    private void hideTipPopup(){
+        final View popup = rootLayout.findViewById(R.id.tutorial_popup);
+        if (popup != null) {
+            // Start the animation
+            AnimatorSet set = Animations.slideOutDown(popup, 200, 0, rootLayout.getHeight() / 3);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    rootLayout.removeView(popup);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    private void resetTipPrefs(){
+        SharedPreferences.Editor prefEditor = activityPrefs.edit();
+        prefEditor.putBoolean(TIP_START_EDIT_MODE, true);
+        prefEditor.putBoolean(TIP_OPEN_LIB, true);
+        prefEditor.putBoolean(TIP_EDIT_MODE_1, true);
+        prefEditor.putBoolean(TIP_PAD_DEFAULTS, true);
+        prefEditor.putBoolean(TIP_DRAG, true);
+        prefEditor.putBoolean(TIP_LIBRARY_1, true);
+        prefEditor.putBoolean(TIP_LIBRARY_2, true);
+        prefEditor.putBoolean(TIP_LIBRARY_3, true);
+        prefEditor.putBoolean(TIP_LIBRARY_4, true);
+        prefEditor.commit();
+    }
+
+    // Input/output methods
+    private void exportLaunchEvents(){
+        File demoFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "demo");
+        try {
+            // Write local record
+            // packName;orderId;purchaseTime
+            if (!demoFile.exists()) {
+                demoFile.createNewFile();
+            } else {
+                demoFile.delete();
+                demoFile.createNewFile();
+            }
+            FileWriter writer = new FileWriter(demoFile, true);
+            for (LaunchEvent e : launchEvents) {
+                writer.append(String.valueOf(e.timeStamp));
+                writer.append(";");
+                writer.append(e.eventType);
+                writer.append(";");
+                writer.append(String.valueOf(e.sampleId));
+                writer.append(";");
+                writer.append(System.getProperty("line.separator"));
+            }
+            writer.flush();
+            writer.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    private void loadDemo(){
+        launchEvents = new ArrayList<>(50);
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open("demo")));
+            String line;
+            while ((line = reader.readLine()) != null){
+                String[] eventArray = line.trim().split(";");
+                launchEvents.add(new LaunchEvent(Double.valueOf(eventArray[0]), eventArray[1], Integer.valueOf(eventArray[2])));
+            }
+            Log.d(LOG_TAG, "Demo launch events loaded");
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e(LOG_TAG, "Error reading launch events");
+        }
+    }
+    private void importLaunchEvents(){
+        File demoFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "demo");
+        if (demoFile.exists()){
+            launchEvents = new ArrayList<>(50);
+            try {
+                BufferedReader reader = new BufferedReader(new FileReader(demoFile));
+                String line;
+                while ((line = reader.readLine()) != null){
+                    String[] eventArray = line.trim().split(";");
+                    launchEvents.add(new LaunchEvent(Double.valueOf(eventArray[0]), eventArray[1], Integer.valueOf(eventArray[2])));
+                }
+                Log.d(LOG_TAG, "Demo launch events loaded");
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e(LOG_TAG, "Error reading launch events");
+            }
+        } else
+            Log.d(LOG_TAG, "Demo launch events file not found");
+    }
     private void promptForFilename(){
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle("Enter a name");
@@ -3310,11 +3926,36 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         private int sampleRate = 44100;
         private float volume = 0.5f * AudioTrack.getMaxVolume();
         private boolean played = false;
+        private boolean isAssetFile = false;
         private int sampleState = ERROR_NONE;
         private AudioTrack audioTrack;
         private AudioTrack.OnPlaybackPositionUpdateListener listener;
 
         // Constructors
+        public Sample(String path, int id, boolean isAsset){
+            this.path = path;
+            this.id = id;
+            if (isAsset){
+                isAssetFile = true;
+                try {
+                    InputStream stream = getAssets().open(path);
+                    sampleByteLength = stream.available() - 44;
+                    sampleRate = 44100;
+                    reloadAudioTrack();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            else {
+                sampleFile = new File(path);
+                Log.d(LOG_TAG, "Sample path: " + sampleFile.getAbsolutePath());
+                if (sampleFile.exists()){
+                    sampleByteLength = (int)sampleFile.length() - 44;
+                    sampleRate = Utils.getWavSampleRate(sampleFile);
+                    reloadAudioTrack();
+                } else Log.d(LOG_TAG, "File doesn't exist");
+            }
+        }
         public Sample(String path, int id){
             this.path = path;
             this.id = id;
@@ -3326,6 +3967,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 reloadAudioTrack();
             } else Log.d(LOG_TAG, "File doesn't exist");
         }
+        /*
         public Sample(String path, int launchMode, boolean loopMode){
             this.path = path;
             loop = loopMode;
@@ -3333,6 +3975,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 this.launchMode = LAUNCHMODE_TRIGGER;
             reloadAudioTrack();
         }
+        */
 
         // Public methods
         public void setViewId(int id){this.id = id;}
@@ -3486,7 +4129,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             if (runtime.totalMemory() + (sampleByteLength - runtime.freeMemory()) < runtime.maxMemory() * 0.9) {
                 InputStream stream = null;
                 try {
-                    stream = new BufferedInputStream(new FileInputStream(sampleFile));
+                    if (isAssetFile){
+                        stream = getAssets().open(path);
+                    }
+                    else {
+                        stream = new BufferedInputStream(new FileInputStream(sampleFile));
+                    }
                     stream.skip(44);
                     byte[] bytes = new byte[sampleByteLength];
                     stream.read(bytes);

@@ -8,7 +8,7 @@
         android:title="@string/pref_bpm"
         android:summary="@string/pref_bpm_summary"
         android:persistent="true"
-        android:defaultValue="120"/>
+        android:defaultValue="128"/>
 
     <ListPreference android:key="pref_time_signature"
 
@@ -39,5 +39,12 @@
             android:entries="@array/quantization_modes"
             android:entryValues="@array/quant_mode_values"
             android:defaultValue="0"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/general_pref_title">
+        <SwitchPreference android:key="SHOW_TIPS"
+            android:title="@string/pref_show_tips"
+            android:summary="@string/pref_show_tips_summary"
+            android:defaultValue="true" />
     </PreferenceCategory>
 </PreferenceScreen>
