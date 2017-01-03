@@ -3,6 +3,8 @@
 
     <string name="app_name" translatable="false">Mixmatic Loop Pad</string>
 
+    <string name="privacy_policy_url" translatable="false">https://firebasestorage.googleapis.com/v0/b/mixmatic-loop-pad.appspot.com/o/PrivacyPolicy%2Fprivacypolicy.htm?alt=media&amp;token=bd7efa04-d53a-40fa-960e-e04b7df9e3be</string>
+
     <!-- Advertising strings-->
     <string name="admob_id" translatable="false">ca-app-pub-4640479150069852~9455449521</string>
     <string name="launch_pad_activity_interstitial_ad_id" translatable="false">ca-app-pub-4640479150069852/9227646327</string>
@@ -38,6 +40,7 @@
     <string name="library_tip_2">More sample packs can be downloaded through the in-app store</string>
     <string name="library_tip_3">Create your own samples from your music collection or the built-in microphone by pressing the + icon</string>
     <string name="library_tip_4">Preview a sample by pressing the wave icon\n\nLong press a sample to drag it to a touchpad</string>
+    <string name="demo_sample_uneditable">Demo samples included with the app cannot be edited</string>
 
 
     <!-- Main loop pad activity menu -->
@@ -49,6 +52,7 @@
     <string name="action_rewind">Rewind</string>
     <string name="action_save_mix">Export mix as wav</string>
     <string name="action_clear_pads">Clear all touch pads</string>
+    <string name="action_privacy_policy">Privacy Policy</string>
     <string name="clear_pads_prompt">Are you sure you want to remove the samples from all touch pads?</string>
     <string name="action_reset_demo">Restore demo pad setup</string>
     <string name="reset_demo_prompt">Are you sure you want to restore all touch pads to their original state?</string>
@@ -214,6 +218,8 @@
     <string name="general_pref_title">General Preferences</string>
     <string name="pref_show_tips">Show popup tips</string>
     <string name="pref_show_tips_summary">Turn off then on to re-show tips that have already been seen</string>
+    <string name="show_tool_descs">Show toolbar descriptions</string>
+    <string name="show_tool_descs_summary">Show a description of each toobar function when in edit mode</string>
 
     <!-- Strings for re-sample dialog -->
     <string name="sample_tempo_msg" formatted="false">Sample tempo: %.2f</string>

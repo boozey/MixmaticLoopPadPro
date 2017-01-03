@@ -21,10 +21,6 @@
 
     <PreferenceCategory android:title="@string/loop_pad_pref_title">
 
-    <SwitchPreference android:key="always_show_sample_name_overlay"
-        android:title="@string/show_sample_name_overlay"
-        android:summary="@string/show_sample_overlay_summary"
-        android:defaultValue="false" />
         <ListPreference android:key="pref_launch_mode"
             android:title="@string/pref_launch_mode"
             android:entries="@array/launch_modes"
@@ -42,6 +38,14 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/general_pref_title">
+        <SwitchPreference android:key="always_show_sample_name_overlay"
+            android:title="@string/show_sample_name_overlay"
+            android:summary="@string/show_sample_overlay_summary"
+            android:defaultValue="false" />
+        <SwitchPreference android:key="show_tool_descs"
+            android:title="@string/show_tool_descs"
+            android:summary="@string/show_tool_descs_summary"
+            android:defaultValue="true"/>
         <SwitchPreference android:key="SHOW_TIPS"
             android:title="@string/pref_show_tips"
             android:summary="@string/pref_show_tips_summary"

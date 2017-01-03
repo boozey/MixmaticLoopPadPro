@@ -31,24 +31,24 @@
             android:parentActivityName=".LaunchPadActivity">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
-
                 <category android:name="android.intent.category.DEFAULT" />
-
                 <data android:mimeType="audio/*" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".LaunchPadActivity"
             android:label="@string/title_activity_launch_pad">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".EditPreferencesActivity"
-            android:label="@string/title_activity_sample_edit_preferences">
+            android:label="@string/title_activity_sample_edit_preferences"
+            android:theme="@style/PreferenceScreenTheme">
 
         </activity>
         <activity android:name=".StoreActivity"

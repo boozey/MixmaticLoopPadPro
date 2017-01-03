@@ -232,7 +232,7 @@
         android:layout_marginRight="33dp"
         android:layout_below="@id/my_toolbar"
         android:orientation="vertical"
-        android:visibility="visible">
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="fill_parent"

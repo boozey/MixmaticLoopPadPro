@@ -53,6 +53,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AnticipateOvershootInterpolator;
+import android.webkit.WebView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.BaseExpandableListAdapter;
@@ -60,6 +61,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ExpandableListView;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -162,12 +164,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.loading_screen);
-        context = this;
 
         // Find the retained fragment on activity restarts
         FragmentManager fm = getFragmentManager();
         savedData = (LaunchPadData) fm.findFragmentByTag("data");
+        if (savedData == null)
+            setContentView(R.layout.loading_screen);
+        context = this;
 
         new Thread(new Runnable() {
             @Override
@@ -285,6 +288,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     item.setIcon(R.drawable.ic_action_av_play_arrow);
                     stopPlayBack();
                     showInterstitialAd();
+                    showTipPopup(TIP_WELCOME);
+                    if (!isSampleLibraryShowing)
+                        showTipPopup(TIP_START_EDIT_MODE);
                 }
                 else if (launchEvents.size() > 0 && playEventIndex < launchEvents.size()){
                     item.setIcon(R.drawable.ic_action_av_pause);
@@ -309,6 +315,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 return true;
             case R.id.action_reset_demo:
                 resetDemo();
+                return true;
+            case R.id.action_privacy_policy:
+                showPrivacyPolicyPopup();
                 return true;
         }
         return super.onOptionsItemSelected(item);
@@ -354,6 +363,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public boolean onKeyDown(int keycode, KeyEvent e) {
         switch (keycode) {
             case KeyEvent.KEYCODE_BACK:
+                if (rootLayout.findViewById(R.id.privacy_policy_popup) != null){
+                    hidePrivacyPolicyPopup();
+                    return true;
+                }
                 if (rootLayout.findViewById(R.id.tutorial_popup) != null){
                     hideTipPopup();
                     return true;
@@ -396,7 +409,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                             timeSignature));
                 break;
             case SHOW_TIPS:
-                resetTipPrefs();
+                if (activityPrefs.getBoolean(SHOW_TIPS, false))
+                    resetTipPrefs();
                 break;
         }
     }
@@ -405,7 +419,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public static final String STARTER_PACK_NAME = "HLS_128bpm_Baby_A#";
     private BroadcastReceiver br;
     private boolean isFirstRun = false;
-    private void loadInBackground(){
+    private void loadInBackground() {
         // Prepare shared preferences
         launchPadprefs = getPreferences(MODE_PRIVATE);
         PreferenceManager.setDefaultValues(this, R.xml.sample_edit_preferences, true);
@@ -420,18 +434,20 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
         // Set up audio control
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
-        am = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         // Prepare stoarage directories
-        if (Utils.isExternalStorageWritable()){
+        if (Utils.isExternalStorageWritable()) {
             sampleDirectory = new File(getExternalFilesDir(null), "Samples");
             if (!sampleDirectory.exists())
-                if (!sampleDirectory.mkdir()) Log.e(LOG_TAG, "error creating external files directory");
+                if (!sampleDirectory.mkdir())
+                    Log.e(LOG_TAG, "error creating external files directory");
             samplePackDirectory = new File(getExternalFilesDir(null), "Sample Packs");
         } else {
             sampleDirectory = new File(getFilesDir(), "Samples");
             if (!sampleDirectory.exists())
-                if (!sampleDirectory.mkdir()) Log.e(LOG_TAG, "error creating internal files directory");
+                if (!sampleDirectory.mkdir())
+                    Log.e(LOG_TAG, "error creating internal files directory");
             samplePackDirectory = new File(getFilesDir(), "Sample Packs");
         }
 
@@ -441,33 +457,23 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         // Prepare sampleListAdapter and samplePackListAdapter
         sampleListAdapter = new SampleListAdapter(context, R.layout.sample_list_item);
         samplePackListAdapter = new SamplePackListAdapter(context, R.layout.sample_pack_list_item);
-        new Thread(new Runnable() {
+        samplePackListAdapter.refresh();
+        File[] sampleFiles = sampleDirectory.listFiles(new FileFilter() {
             @Override
-            public void run() {
-                samplePackListAdapter.refresh();
-                File[] sampleFiles = sampleDirectory.listFiles(new FileFilter() {
-                    @Override
-                    public boolean accept(File pathname) {
-                        return pathname.getName().endsWith(".wav");
-                    }
-                });
-                sampleListAdapter.addAll(sampleFiles);
-            }
-        }).start();
-
-        // Load UI
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                loadUi();
+            public boolean accept(File pathname) {
+                return pathname.getName().endsWith(".wav");
             }
         });
+        sampleListAdapter.addAll(sampleFiles);
+
+        loadUi();
     }
     private void loadUi(){
-        setContentView(R.layout.activity_launch_pad);
+        LayoutInflater inflater = getLayoutInflater();
+        final View contentView = inflater.inflate(R.layout.activity_launch_pad, null);
 
-        rootLayout = (RelativeLayout)findViewById(R.id.launch_pad_root_layout);
-        LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
+        rootLayout = (RelativeLayout)contentView.findViewById(R.id.launch_pad_root_layout);
+        LinearLayout library = (LinearLayout)rootLayout.findViewById(R.id.sample_library);
         library.setOnDragListener(new LibraryDragEventListener());
         library.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -527,36 +533,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false))
             rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.VISIBLE);
 
-        // Setup App bar
-        Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
-        myToolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
-        setSupportActionBar(myToolbar);
-        ActionBar actionBar = getSupportActionBar();
-        if (actionBar != null){
-            actionBar.setDisplayShowHomeEnabled(false);
-            actionBar.setDisplayShowTitleEnabled(false);
-            actionBar.setCustomView(R.layout.counter_bar);
-            actionBar.setDisplayShowCustomEnabled(true);
-            counterTextView = (TextView)actionBar.getCustomView().findViewById(R.id.counter_view);
-            bpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 128);
-            ((TextView)actionBar.getCustomView().findViewById(R.id.bpm_view)).setText(getString(R.string.bpm_display, bpm));
-            timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
-            updateCounterMessage();
-            actionBar.setDisplayShowCustomEnabled(true);
-        }
-
-        // Initialize Ads
-        initializeAds();
-
         // Check for network connectivity
         checkInternetConnection();
 
         if (savedData != null){
             samples = savedData.getSamples();
             counter = savedData.getCounter();
-            double sec = (double)counter / 1000;
-            int min = (int)Math.floor(sec / 60);
-            counterTextView.setText(String.format(Locale.US, "%2d : %.2f", min, sec % 60));
             isEditMode = savedData.isEditMode();
             activePads = savedData.getActivePads();
             isRecording = savedData.isRecording();
@@ -570,45 +552,63 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             sampleListAdapter.sampleLengths = savedData.sampleLengths;
             launchQueue = savedData.getLaunchQueue();
             // Setup touch pads from retained fragment
-            setupPadsFromFrag();
-            updatePadOverlay();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    setContentView(contentView);
+                    initializeAds();
+                    setupAppBar();
+                    setupPadsFromFrag();
+                    updatePadOverlay();
+                    if (isEditMode) showToolBar();
+                    if (isPlaying || isRecording)
+                        new Thread(new CounterThread()).start();
+                }
+            });
         }
         else{
             FragmentManager fm = getFragmentManager();
             savedData = new LaunchPadData();
             fm.beginTransaction().add(savedData, "data").commit();
             // Setup touch pads from files
-            new Thread(new Runnable() {
+            runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    isFirstRun = true;//activityPrefs.getBoolean(IS_FIRST_RUN, true);
+                    setContentView(contentView);
+                    // Initialize Ads
+                    initializeAds();
+                    setupAppBar();
+                    isFirstRun = activityPrefs.getBoolean(IS_FIRST_RUN, true);
                     if (isFirstRun) {
                         interactionCount = 0;
-                        setupPadsFromAssets();
-                        loadDemo();
-                        SharedPreferences.Editor editor = activityPrefs.edit();
-                        editor.putBoolean(IS_FIRST_RUN, false);
-                        editor.apply();
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                setupPadsFromAssets();
+                                loadDemo();
+                                SharedPreferences.Editor editor = activityPrefs.edit();
+                                editor.putBoolean(IS_FIRST_RUN, false);
+                                editor.apply();
+                                updatePadOverlay();
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        playMix();
+                                    }
+                                });
+                            }
+                        }).start();
+                    } else {
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                setupPadsFromFile();
+                                updatePadOverlay();
+                            }
+                        }).start();
                     }
-                    else
-                        setupPadsFromFile();
-
-                    // Prepare Sample Library list adapter
-                    File[] sampleFiles = sampleDirectory.listFiles(new FileFilter() {
-                        @Override
-                        public boolean accept(File pathname) {
-                            return pathname.getName().endsWith(".wav");
-                        }
-                    });
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            updatePadOverlay();
-                            if (isFirstRun) playMix();
-                        }
-                    });
                 }
-            }).start();
+            });
         }
     }
     private void cleanUpStorageDirs(){
@@ -669,12 +669,30 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             oldHomeDirectory.delete();
         }
     }
+    private void setupAppBar(){
+        Toolbar myToolbar = (Toolbar) rootLayout.findViewById(R.id.my_toolbar);
+        myToolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
+        setSupportActionBar(myToolbar);
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null){
+            actionBar.setDisplayShowHomeEnabled(false);
+            actionBar.setDisplayShowTitleEnabled(false);
+            actionBar.setCustomView(R.layout.counter_bar);
+            actionBar.setDisplayShowCustomEnabled(true);
+            counterTextView = (TextView)actionBar.getCustomView().findViewById(R.id.counter_view);
+            bpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 128);
+            ((TextView)actionBar.getCustomView().findViewById(R.id.bpm_view)).setText(getString(R.string.bpm_display, bpm));
+            timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
+            updateCounterMessage();
+            actionBar.setDisplayShowCustomEnabled(true);
+        }
+    }
     private void setupPadsFromFile() {
         samples = new SparseArray<Sample>(24);
         activePads = new ArrayList<Integer>(24);
         int padInt = 1;
         for (int id : touchPadIds){
-            final TouchPad pad = (TouchPad)findViewById(id);
+            final TouchPad pad = (TouchPad)rootLayout.findViewById(id);
             String padNumber = String.valueOf(padInt++);
             pad.setTag(padNumber);
             pad.setOnTouchListener(TouchPadTouchListener);
@@ -742,7 +760,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             for (int id : touchPadIds) {
                 Sample sample;
                 String padNumber = String.valueOf(padIndex++);
-                TouchPad pad = (TouchPad) findViewById(id);
+                TouchPad pad = (TouchPad) rootLayout.findViewById(id);
                 pad.setTag(padNumber);
                 pad.setOnTouchListener(TouchPadTouchListener);
                 pad.setOnDragListener(new PadDragEventListener());
@@ -822,12 +840,14 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             overlay.setLayoutParams(params);
             rootLayout.addView(overlay);
             if (isPlaying || isRecording) stopPlayBack();
+            if (getSupportActionBar() != null)getSupportActionBar().hide();
         }
     }
     private void enableApp(){
         View overlay = rootLayout.findViewById(R.id.no_network_overlay);
         if (overlay != null)
             rootLayout.removeView(overlay);
+        if (getSupportActionBar() != null)getSupportActionBar().show();
     }
     private void setupPadsFromAssets(){
         SharedPreferences.Editor prefEditor = launchPadprefs.edit();
@@ -1252,6 +1272,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
     /** Edit Mode **/
     public static final String ALWAYS_SHOW_SAMPLE_NAME_OVERLAY = "always_show_sample_name_overlay";
+    public static final String SHOW_TOOL_DESCS = "show_tool_descs";
     public static final String PREF_BPM = "pref_bpm";
     public static final String PREF_TIME_SIGNATURE = "pref_time_signature";
     public static final String PREF_LAUNCH_MODE = LaunchPadPreferencesFragment.PREF_LAUNCH_MODE;
@@ -1330,7 +1351,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 String padNumber = (String)findViewById(selectedSampleID).getTag();
 
                 // Update toolbar
-                updateVolumeDisplay();
+                updateToolbar();
 
                 if (launchPadprefs.getInt(padNumber + LAUNCHMODE, Sample.LAUNCHMODE_TRIGGER) == Sample.LAUNCHMODE_GATE)
                     rootLayout.findViewById(R.id.action_launch_mode).setBackgroundResource(R.drawable.ic_keyboard);
@@ -1565,13 +1586,16 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         set.setInterpolator(new AccelerateDecelerateInterpolator());
         if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false)){
             set.playTogether(slideLeft, slideUp);
-        } else {
+        }
+        else {
             View overlay = rootLayout.findViewById(R.id.edit_mode_overlay);
             overlay.setVisibility(View.VISIBLE);
             AnimatorSet fadeIn = Animations.fadeIn(overlay, 200, 0);
             set.playTogether(slideLeft, slideUp, fadeIn);
         }
         set.start();
+        if (activityPrefs.getBoolean(SHOW_TOOL_DESCS, true))
+            showToolDescs();
     }
     private void hideToolBar(){
         View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
@@ -1617,6 +1641,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             }
         });
         set.start();
+        hideToolDescs();
     }
     public void toolBarClick(View v){
         SharedPreferences.Editor prefEditor = launchPadprefs.edit();
@@ -1714,6 +1739,30 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             default:
                 return;
         }
+    }
+    private void updateToolbar(){
+        updateVolumeDisplay();
+    }
+    private void showToolDescs(){
+        View view = rootLayout.findViewById(R.id.tool_bar_desc_view);
+        if (view == null){
+            LayoutInflater inflater = getLayoutInflater();
+            view = inflater.inflate(R.layout.launch_pad_tool_bar_desc_view, null);
+            View toolBar = rootLayout.findViewById(R.id.pad_toolbar);
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, toolBar.getHeight());
+            params.topMargin = toolBar.getTop();
+            params.leftMargin = toolBar.getWidth() - 16;
+            view.setLayoutParams(params);
+            rootLayout.addView(view);
+        }
+        view.setVisibility(View.VISIBLE);
+        AnimatorSet set = new AnimatorSet();
+        set.playSequentially(Animations.fadeIn(view, 200, 200), Animations.fadeOut(view, 1000, 3000));
+        set.start();
+    }
+    private void hideToolDescs(){
+        View view = rootLayout.findViewById(R.id.tool_bar_desc_view);
+        if (view != null) view.setVisibility(View.GONE);
     }
     private void showVolumePopup(){
         final View popup = rootLayout.findViewById(R.id.volume_popup);
@@ -2480,9 +2529,15 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         if (isEditMode) {
             intent.putExtra(TOUCHPAD_ID, selectedSampleID);
             if (samples.indexOfKey(selectedSampleID) >= 0) {
-                intent.putExtra(SAMPLE_PATH, samples.get(selectedSampleID).getPath());
-                String padNumber = (String) findViewById(selectedSampleID).getTag();
-                intent.putExtra(COLOR, launchPadprefs.getInt(padNumber + COLOR, 0));
+                if (samples.get(selectedSampleID).isAssetFile) {
+                    Toast.makeText(context, R.string.demo_sample_uneditable, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                else {
+                    intent.putExtra(SAMPLE_PATH, samples.get(selectedSampleID).getPath());
+                    String padNumber = (String) findViewById(selectedSampleID).getTag();
+                    intent.putExtra(COLOR, launchPadprefs.getInt(padNumber + COLOR, 0));
+                }
             }
         }
         startActivityForResult(intent, GET_SAMPLE);
@@ -2626,7 +2681,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
                 }
             });
-        } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
+        } catch (IabHelper.IabAsyncInProgressException | IllegalStateException e) { e.printStackTrace(); }
     }
 
     // Admob Advertising
@@ -2650,6 +2705,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             AdRequest adRequest = new AdRequest.Builder()
                     .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
                     .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
+                    .addTestDevice("B351AB87B7184CD82FD0563D59D1E95B")
                     .build();
 
             mInterstitialAd.setAdListener(new AdListener() {
@@ -3165,9 +3221,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         exportLaunchEvents();
         reconnectTouchListeners();
         isRecording = false;
-        showTipPopup(TIP_WELCOME);
-        if (!isSampleLibraryShowing)
-            showTipPopup(TIP_START_EDIT_MODE);
     }
     public void PlayButtonClick(View v){
         if (isPlaying || isRecording) {
@@ -3236,8 +3289,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         showTipPopup(TIP_DRAG, R.string.drag_tip, R.string.got_it, R.drawable.ic_drag_tip, null);
                     break;
                 case TIP_LIBRARY_1:
-                    if (activityPrefs.getBoolean(TIP_LIBRARY_1, true))
+                    if (activityPrefs.getBoolean(TIP_LIBRARY_1, true)) {
+                        SharedPreferences.Editor prefEditor = activityPrefs.edit();
+                        prefEditor.putBoolean(TIP_START_EDIT_MODE, false);
+                        prefEditor.putBoolean(TIP_OPEN_LIB, false);
+                        prefEditor.apply();
                         showTipPopup(TIP_LIBRARY_1, R.string.library_tip_1, R.string.next, R.drawable.ic_library_tip_1, TIP_LIBRARY_2);
+                    }
                     break;
                 case TIP_LIBRARY_2:
                     if (activityPrefs.getBoolean(TIP_LIBRARY_2, true))
@@ -3351,6 +3409,55 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         prefEditor.putBoolean(TIP_LIBRARY_3, true);
         prefEditor.putBoolean(TIP_LIBRARY_4, true);
         prefEditor.commit();
+    }
+
+    private void showPrivacyPolicyPopup(){
+        LayoutInflater inflater = getLayoutInflater();
+        View popup = inflater.inflate(R.layout.privacy_policy_popup, null);
+
+        WebView webView = (WebView)popup.findViewById(R.id.webView);
+        webView.loadUrl(getString(R.string.privacy_policy_url));
+
+        Button button = (Button)popup.findViewById(R.id.yes_button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                hidePrivacyPolicyPopup();
+            }
+        });
+
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        params.addRule(RelativeLayout.BELOW, R.id.my_toolbar);
+        rootLayout.addView(popup, params);
+        Animations.fadeIn(popup, 200, 0).start();
+    }
+    private void hidePrivacyPolicyPopup(){
+        final View popup = rootLayout.findViewById(R.id.privacy_policy_popup);
+        if (popup != null) {
+            AnimatorSet set = Animations.fadeOut(popup, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    rootLayout.removeView(popup);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
     }
 
     // Input/output methods
@@ -3967,15 +4074,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 reloadAudioTrack();
             } else Log.d(LOG_TAG, "File doesn't exist");
         }
-        /*
-        public Sample(String path, int launchMode, boolean loopMode){
-            this.path = path;
-            loop = loopMode;
-            if (!setLaunchMode(launchMode))
-                this.launchMode = LAUNCHMODE_TRIGGER;
-            reloadAudioTrack();
-        }
-        */
 
         // Public methods
         public void setViewId(int id){this.id = id;}

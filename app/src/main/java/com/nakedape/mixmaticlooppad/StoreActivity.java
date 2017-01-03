@@ -154,6 +154,7 @@ public class StoreActivity extends AppCompatActivity {
             AdRequest adRequest = new AdRequest.Builder()
                     .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
                     .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
+                    .addTestDevice("B351AB87B7184CD82FD0563D59D1E95B")
                     .build();
             mAdView.loadAd(adRequest);
         }
@@ -420,6 +421,7 @@ public class StoreActivity extends AppCompatActivity {
             rootLayout.addView(overlay);
             findViewById(R.id.bottom_navigation).setVisibility(View.GONE);
             findViewById(R.id.adView).setVisibility(View.GONE);
+            if (getSupportActionBar() != null)getSupportActionBar().hide();
         }
     }
     private void enableApp(){
@@ -429,6 +431,7 @@ public class StoreActivity extends AppCompatActivity {
 
         findViewById(R.id.bottom_navigation).setVisibility(View.VISIBLE);
         findViewById(R.id.adView).setVisibility(View.VISIBLE);
+        if (getSupportActionBar() != null)getSupportActionBar().show();
     }
     // Store
     private MediaPlayer mediaPlayer;

@@ -171,6 +171,7 @@ public class SampleEditActivity extends AppCompatActivity {
             AdRequest adRequest = new AdRequest.Builder()
                     .addTestDevice("19BA58A88672F3F9197685FEEB600EA7")
                     .addTestDevice("84217760FD1D092D92F5FE072A2F1861")
+                    .addTestDevice("B351AB87B7184CD82FD0563D59D1E95B")
                     .build();
             mAdView.loadAd(adRequest);
         }
@@ -486,6 +487,7 @@ public class SampleEditActivity extends AppCompatActivity {
             RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             overlay.setLayoutParams(params);
             rootLayout.addView(overlay);
+            if (getSupportActionBar() != null)getSupportActionBar().hide();
         }
     }
     private void enableApp(){
@@ -493,6 +495,7 @@ public class SampleEditActivity extends AppCompatActivity {
         if (overlay != null)
             rootLayout.removeView(overlay);
         findViewById(R.id.adView).setVisibility(View.VISIBLE);
+        if (getSupportActionBar() != null)getSupportActionBar().show();
     }
 
     // New sample popup methods
