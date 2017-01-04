@@ -621,7 +621,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                             @Override
                             public void run() {
                                 setupPadsFromFile();
-                                updatePadOverlay();
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        updatePadOverlay();
+                                    }
+                                });
                             }
                         }).start();
                     }
@@ -1784,7 +1789,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
         view.setVisibility(View.VISIBLE);
         AnimatorSet set = new AnimatorSet();
-        set.playSequentially(Animations.fadeIn(view, 200, 200), Animations.fadeOut(view, 1000, 3000));
+        set.playSequentially(Animations.fadeIn(view, 200, 200), Animations.fadeOut(view, 500, 2000));
         set.start();
     }
     private void hideToolDescs(){
