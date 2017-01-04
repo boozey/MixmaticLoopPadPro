@@ -26,6 +26,8 @@ public class LaunchPadData extends Fragment {
     // ArrayLists for SampleListAdapter
     public ArrayList<File> sampleFiles;
     public ArrayList<String> sampleLengths;
+    public int interactionCount;
+    public boolean showRemoveAdsPrompt;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {

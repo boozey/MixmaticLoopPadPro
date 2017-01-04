@@ -119,7 +119,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public static String QUANTIZE_MODE = "com.nakedape.mixmaticlooppad.quantize_mode";
     public static String IS_ASSET_FILE = "com.nakedape.mixmaticlooppad.is_asset_file";
     public static String IS_FIRST_RUN = "com.nakedape.mismaticlooppad.is_first_run";
+
     private static int GET_SAMPLE = 0;
+    private static String COUNTER_STATE = "COUNTER_STATE";
 
     private boolean isEditMode = false;
     private boolean isRecording = false;
@@ -159,18 +161,27 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             R.id.touchPad19, R.id.touchPad20, R.id.touchPad21, R.id.touchPad22, R.id.touchPad23, R.id.touchPad24};
     private Menu actionBarMenu;
     private Runtime runtime;
+    private View contentView;
 
-    // Activity overrides
+    // Activity lifecycle
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.d(LOG_TAG, "onCreate()");
+        if (savedInstanceState != null){
+            counter = savedInstanceState.getLong(COUNTER_STATE, 0);
+        }
 
         // Find the retained fragment on activity restarts
         FragmentManager fm = getFragmentManager();
         savedData = (LaunchPadData) fm.findFragmentByTag("data");
-        if (savedData == null)
-            setContentView(R.layout.loading_screen);
+        setContentView(R.layout.loading_screen);
         context = this;
+        // Prepare shared preferences
+        launchPadprefs = getPreferences(MODE_PRIVATE);
+        PreferenceManager.setDefaultValues(this, R.xml.sample_edit_preferences, true);
+        activityPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+        activityPrefs.registerOnSharedPreferenceChangeListener(this);
 
         new Thread(new Runnable() {
             @Override
@@ -180,10 +191,22 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }).start();
     }
     @Override
+    public void onStart(){
+        super.onStart();
+        Log.d(LOG_TAG, "onStart()");
+    }
+    @Override
+    public void onResume() {
+        super.onResume();
+        Log.d(LOG_TAG, "onResume()");
+        stopCounterThread = false;
+        stopPlaybackThread = false;
+        checkInternetConnection();
+    }
+    @Override
     public void onPause(){
         super.onPause();
-        // Logs 'app deactivate' App Event to Facebook.
-        //AppEventsLogger.deactivateApp(this);
+        Log.d(LOG_TAG, "onPause()");
 
         if (samplePlayer != null){
             if (samplePlayer.isPlaying()) {
@@ -194,60 +217,57 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             samplePlayer.release();
             samplePlayer = null;
         }
-    }
-    @Override
-    public void onResume() {
-        super.onResume();
-        // Logs 'install' and 'app activate' App Events to Facebook.
-        //AppEventsLogger.activateApp(this);
-        if (rootLayout != null) {
-            int newBpm = activityPrefs.getInt(LaunchPadPreferencesFragment.PREF_BPM, 120);
-            int newTimeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
 
-            if (newBpm != bpm || newTimeSignature != timeSignature) {
-                counter = 0;
-                bpm = newBpm;
-                timeSignature = newTimeSignature;
-            }
-            if (counterTextView != null)
-                updateCounterMessage();
-        }
+
     }
     @Override
-    protected void onDestroy(){
-        super.onDestroy();
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putLong(COUNTER_STATE, counter);
+
+        super.onSaveInstanceState(outState);
+    }
+    @Override
+    public void onStop(){
+        Log.d(LOG_TAG, "onStop()");
+        unregisterNetworkListener();
         if (progressDialog != null)
             if (progressDialog.isShowing())
                 progressDialog.cancel();
+
         stopCounterThread = true;
         stopPlaybackThread = true;
-        unregisterNetworkListener();
-        if (rootLayout != null) {
-            if (isFinishing()) {
-                // Release audiotrack resources
-                for (Integer i : activePads) {
-                    Sample s = samples.get(i);
-                    isPlaying = false;
-                    if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
-                        s.stop();
-                    }
-                    s.audioTrack.release();
+
+        if (isFinishing()) {
+            // Release audiotrack resources
+            for (Integer i : activePads) {
+                Sample s = samples.get(i);
+                isPlaying = false;
+                if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                    s.stop();
                 }
-            } else {
-                savedData.setSamples(samples);
-                savedData.setCounter(counter);
-                savedData.setEditMode(isEditMode);
-                savedData.setActivePads(activePads);
-                savedData.setPlaying(isPlaying);
-                savedData.setRecording(isRecording);
-                savedData.setRecordingEndTime(recordingEndTime);
-                savedData.setLaunchEvents(launchEvents);
-                savedData.setLaunchQueue(launchQueue);
-                savedData.setPlayEventIndex(playEventIndex);
-                savedData.sampleFiles = sampleListAdapter.sampleFiles;
-                savedData.sampleLengths = sampleListAdapter.sampleLengths;
+                s.audioTrack.release();
             }
         }
+        super.onStop();
+    }
+    @Override
+    protected void onDestroy(){
+        Log.d(LOG_TAG, "onDestroy()");
+        savedData.setSamples(samples);
+        savedData.setCounter(counter);
+        savedData.setEditMode(isEditMode);
+        savedData.setActivePads(activePads);
+        savedData.setPlaying(isPlaying);
+        savedData.setRecording(isRecording);
+        savedData.setRecordingEndTime(recordingEndTime);
+        savedData.setLaunchEvents(launchEvents);
+        savedData.setLaunchQueue(launchQueue);
+        savedData.setPlayEventIndex(playEventIndex);
+        savedData.sampleFiles = sampleListAdapter.sampleFiles;
+        savedData.sampleLengths = sampleListAdapter.sampleLengths;
+        savedData.showRemoveAdsPrompt = showRemoveAdsPrompt;
+        savedData.interactionCount = interactionCount;
+        super.onDestroy();
     }
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -291,15 +311,18 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     showTipPopup(TIP_WELCOME);
                     if (!isSampleLibraryShowing)
                         showTipPopup(TIP_START_EDIT_MODE);
+                } else {
+                    item.setIcon(R.drawable.ic_action_av_pause);
+                    playMix();
                 }
-                else if (launchEvents.size() > 0 && playEventIndex < launchEvents.size()){
+                /*else if (launchEvents.size() > 0 && playEventIndex < launchEvents.size()){
                     item.setIcon(R.drawable.ic_action_av_pause);
                     playMix();
                 } else if (launchEvents.size() > 0){
                     RewindButtonClick(null);
                     item.setIcon(R.drawable.ic_action_av_pause);
                     playMix();
-                }
+                }*/
                 return true;
             case R.id.action_rewind:
                 RewindButtonClick(null);
@@ -419,22 +442,18 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     public static final String STARTER_PACK_NAME = "HLS_128bpm_Baby_A#";
     private BroadcastReceiver br;
     private boolean isFirstRun = false;
+    private boolean isAppDisabled = false;
     private void loadInBackground() {
-        // Prepare shared preferences
-        launchPadprefs = getPreferences(MODE_PRIVATE);
-        PreferenceManager.setDefaultValues(this, R.xml.sample_edit_preferences, true);
-        activityPrefs = PreferenceManager.getDefaultSharedPreferences(this);
-        activityPrefs.registerOnSharedPreferenceChangeListener(this);
-
         // Instance of runtime to check memory use
         runtime = Runtime.getRuntime();
-
-        // Initialize Facebook SDK
-        //FacebookSdk.sdkInitialize(getApplicationContext());
 
         // Set up audio control
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+
+        LayoutInflater inflater = getLayoutInflater();
+        contentView = inflater.inflate(R.layout.activity_launch_pad, null);
+        rootLayout = (RelativeLayout)contentView.findViewById(R.id.launch_pad_root_layout);
 
         // Prepare stoarage directories
         if (Utils.isExternalStorageWritable()) {
@@ -469,10 +488,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         loadUi();
     }
     private void loadUi(){
-        LayoutInflater inflater = getLayoutInflater();
-        final View contentView = inflater.inflate(R.layout.activity_launch_pad, null);
-
-        rootLayout = (RelativeLayout)contentView.findViewById(R.id.launch_pad_root_layout);
         LinearLayout library = (LinearLayout)rootLayout.findViewById(R.id.sample_library);
         library.setOnDragListener(new LibraryDragEventListener());
         library.setOnTouchListener(new View.OnTouchListener() {
@@ -533,10 +548,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         if (activityPrefs.getBoolean(ALWAYS_SHOW_SAMPLE_NAME_OVERLAY, false))
             rootLayout.findViewById(R.id.edit_mode_overlay).setVisibility(View.VISIBLE);
 
-        // Check for network connectivity
-        checkInternetConnection();
-
-        if (savedData != null){
+        if (savedData != null && savedData.getSamples() != null){
             samples = savedData.getSamples();
             counter = savedData.getCounter();
             isEditMode = savedData.isEditMode();
@@ -551,6 +563,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             sampleListAdapter.sampleFiles = savedData.sampleFiles;
             sampleListAdapter.sampleLengths = savedData.sampleLengths;
             launchQueue = savedData.getLaunchQueue();
+            showRemoveAdsPrompt = savedData.showRemoveAdsPrompt;
+            interactionCount = savedData.interactionCount;
+            Log.d(LOG_TAG, "Retained frag data loaded");
             // Setup touch pads from retained fragment
             runOnUiThread(new Runnable() {
                 @Override
@@ -559,7 +574,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     initializeAds();
                     setupAppBar();
                     setupPadsFromFrag();
-                    updatePadOverlay();
+                    //updatePadOverlay();
                     if (isEditMode) showToolBar();
                     if (isPlaying || isRecording)
                         new Thread(new CounterThread()).start();
@@ -570,6 +585,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             FragmentManager fm = getFragmentManager();
             savedData = new LaunchPadData();
             fm.beginTransaction().add(savedData, "data").commit();
+            if (isAppDisabled) disableApp();
+            importLaunchEvents();
+
             // Setup touch pads from files
             runOnUiThread(new Runnable() {
                 @Override
@@ -685,6 +703,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             timeSignature = Integer.parseInt(activityPrefs.getString(LaunchPadPreferencesFragment.PREF_TIME_SIG, "4"));
             updateCounterMessage();
             actionBar.setDisplayShowCustomEnabled(true);
+            if (isAppDisabled) actionBar.hide();
         }
     }
     private void setupPadsFromFile() {
@@ -784,38 +803,41 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
     }
     private void checkInternetConnection() {
-        if (activityPrefs.getBoolean(SHOW_ADS, true) && br == null) {
+        if (activityPrefs.getBoolean(SHOW_ADS, true)) {
             ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = cm.getActiveNetworkInfo();
             //should check null because in airplane mode it will be null
             if (netInfo == null || !netInfo.isConnected()) disableApp();
 
-            br = new BroadcastReceiver() {
+            if (br == null) {
+                br = new BroadcastReceiver() {
 
-                @Override
-                public void onReceive(Context context, Intent intent) {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
 
-                    Bundle extras = intent.getExtras();
+                        Bundle extras = intent.getExtras();
 
-                    NetworkInfo info = (NetworkInfo) extras
-                            .getParcelable("networkInfo");
+                        NetworkInfo info = (NetworkInfo) extras
+                                .getParcelable("networkInfo");
 
-                    if (info != null) {
-                        NetworkInfo.State state = info.getState();
+                        if (info != null) {
+                            NetworkInfo.State state = info.getState();
 
-                        if (state == NetworkInfo.State.CONNECTED) {
-                            enableApp();
-                            initializeIAB();
-                            //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
+                            if (state == NetworkInfo.State.CONNECTED) {
+                                enableApp();
+                                initializeIAB();
+                                //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
 
-                        } else if(activityPrefs.getBoolean(SHOW_ADS, true)) {
-                            disableApp();
-                            //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                            } else if (activityPrefs.getBoolean(SHOW_ADS, true)) {
+                                disableApp();
+                                disposeIAB();
+                                //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                            }
                         }
-                    }
 
-                }
-            };
+                    }
+                };
+            }
 
             final IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -823,11 +845,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
     }
     private void unregisterNetworkListener(){
-        if (br != null)
+        if (br != null) {
             unregisterReceiver(br);
+        }
     }
     private void disableApp(){
-        if (rootLayout.findViewById(R.id.no_network_overlay) == null) {
+        if (rootLayout != null && rootLayout.findViewById(R.id.no_network_overlay) == null) {
             LayoutInflater inflater = getLayoutInflater();
             View overlay = inflater.inflate(R.layout.no_network_overlay, null);
             overlay.setOnTouchListener(new View.OnTouchListener() {
@@ -842,12 +865,16 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             if (isPlaying || isRecording) stopPlayBack();
             if (getSupportActionBar() != null)getSupportActionBar().hide();
         }
+        isAppDisabled = true;
     }
     private void enableApp(){
-        View overlay = rootLayout.findViewById(R.id.no_network_overlay);
-        if (overlay != null)
-            rootLayout.removeView(overlay);
-        if (getSupportActionBar() != null)getSupportActionBar().show();
+        if (rootLayout != null) {
+            View overlay = rootLayout.findViewById(R.id.no_network_overlay);
+            if (overlay != null)
+                rootLayout.removeView(overlay);
+            if (getSupportActionBar() != null) getSupportActionBar().show();
+        }
+        isAppDisabled = false;
     }
     private void setupPadsFromAssets(){
         SharedPreferences.Editor prefEditor = launchPadprefs.edit();
@@ -2649,18 +2676,33 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     private static final String SKU_REMOVE_ADS = "remove_ads";
     private void initializeIAB(){
         // In-app billing init
-        String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
-        mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
-        mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
-            public void onIabSetupFinished(IabResult result) {
-                if (!result.isSuccess()) {
-                    // Oh no, there was a problem.
-                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+        if (mBillingHelper == null) {
+            String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
+            mBillingHelper = new IabHelper(this, base64EncodedPublicKey);
+            mBillingHelper.startSetup(new IabHelper.OnIabSetupFinishedListener() {
+                public void onIabSetupFinished(IabResult result) {
+                    if (!result.isSuccess()) {
+                        // Oh no, there was a problem.
+                        Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+                        return;
+                    }
+                    Log.d(LOG_TAG, "In-app billing initialized");
+                    checkForUnconsumedPurchases();
                 }
-                Log.d(LOG_TAG, "In-app billing initialized");
-                checkForUnconsumedPurchases();
+            });
+        }
+    }
+    private void disposeIAB(){
+        // Disposed when finished and when network is disconnected
+        if (mBillingHelper != null){
+            try {
+                mBillingHelper.dispose();
+            } catch (IabHelper.IabAsyncInProgressException e){
+                e.printStackTrace();
             }
-        });
+            mBillingHelper = null;
+            Log.d(LOG_TAG, "mBillingHelper disposed");
+        }
     }
     public void OpenStore(View v){
         Intent intent = new Intent(context, StoreActivity.class);
@@ -2678,10 +2720,14 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         editor.putBoolean(SHOW_ADS, false);
                         editor.apply();
                     }
+                    disposeIAB();
 
                 }
             });
-        } catch (IabHelper.IabAsyncInProgressException | IllegalStateException e) { e.printStackTrace(); }
+        } catch (IabHelper.IabAsyncInProgressException | IllegalStateException e) {
+            e.printStackTrace();
+            disposeIAB();
+        }
     }
 
     // Admob Advertising
@@ -3462,6 +3508,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
     // Input/output methods
     private void exportLaunchEvents(){
+        if (launchEvents == null) return;
         File demoFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "demo");
         try {
             // Write local record
@@ -3515,7 +3562,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     String[] eventArray = line.trim().split(";");
                     launchEvents.add(new LaunchEvent(Double.valueOf(eventArray[0]), eventArray[1], Integer.valueOf(eventArray[2])));
                 }
-                Log.d(LOG_TAG, "Demo launch events loaded");
+                Log.d(LOG_TAG, "Launch events loaded");
             } catch (IOException e) {
                 e.printStackTrace();
                 Log.e(LOG_TAG, "Error reading launch events");
