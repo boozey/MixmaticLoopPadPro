@@ -74,6 +74,11 @@ import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.InterstitialAd;
 import com.google.android.gms.ads.MobileAds;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.storage.FileDownloadTask;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
+import com.google.firebase.storage.StorageReference;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -95,6 +100,7 @@ import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Timer;
@@ -379,7 +385,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 }
             }
         } else if (requestCode == STORE_RESULT){
-            samplePackListAdapter.refresh();
+            handleStoreResult(data);
         }
     }
     @Override
@@ -2092,19 +2098,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
 
         private void refresh(){
-            // Add in starter pack data
-            if (!names.contains(STARTER_PACK_NAME)) {
-                names.add(STARTER_PACK_NAME);
-                titles.add("Hall Samples Baby A#");
-                tempos.add("128bpm");
-                images.add(BitmapFactory.decodeResource(getResources(), R.drawable.hls_128bpm_baby_a));
-            }
-
             // Add in downloaded packs
             if (samplePackDirectory.exists()) {
+                Log.d(LOG_TAG, "Refreshing sample pack list");
                 File[] packFolders = samplePackDirectory.listFiles();
                 for (File folder : packFolders) {
                     if (folder.isDirectory() && !names.contains(folder.getName())) {
+                        Log.d(LOG_TAG, "Added pack " + folder.getName());
                         names.add(folder.getName());
                         try {
                             BufferedReader br = new BufferedReader(new FileReader(new File(folder, folder.getName() + ".txt")));
@@ -2122,6 +2122,14 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         }
                     }
                 }
+            }
+
+            // Add in starter pack data
+            if (!names.contains(STARTER_PACK_NAME)) {
+                names.add(STARTER_PACK_NAME);
+                titles.add("Hall Samples Baby A#");
+                tempos.add("128bpm");
+                images.add(BitmapFactory.decodeResource(getResources(), R.drawable.hls_128bpm_baby_a));
             }
 
             runOnUiThread(new Runnable() {
@@ -2732,6 +2740,64 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         } catch (IabHelper.IabAsyncInProgressException | IllegalStateException e) {
             e.printStackTrace();
             disposeIAB();
+        }
+    }
+    private void handleStoreResult(Intent data){
+        if (data != null && data.hasExtra(StoreActivity.FB_STORAGE_REF)){
+            StorageReference mStorageRef = FirebaseStorage.getInstance().getReferenceFromUrl(data.getStringExtra(StoreActivity.FB_STORAGE_REF));
+            final String filename = data.getStringExtra(StoreActivity.DOWNLOAD_FILENAME);
+            List<FileDownloadTask> tasks = mStorageRef.getActiveDownloadTasks();
+            for (FileDownloadTask task : tasks) {
+                final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.downloading, 0), Snackbar.LENGTH_INDEFINITE);
+                snackbar.setAction(R.string.hide, new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        snackbar.dismiss();
+                    }
+                });
+                snackbar.show();
+                // Add new listeners to the task using an Activity scope
+                task.addOnProgressListener(new OnProgressListener<FileDownloadTask.TaskSnapshot>() {
+                    @Override
+                    public void onProgress(FileDownloadTask.TaskSnapshot taskSnapshot) {
+                        snackbar.setText(getString(R.string.downloading, taskSnapshot.getBytesTransferred() * 100 / taskSnapshot.getTotalByteCount()));
+                    }
+                }).addOnSuccessListener(this, new OnSuccessListener<FileDownloadTask.TaskSnapshot>() {
+                    @Override
+                    public void onSuccess(FileDownloadTask.TaskSnapshot taskSnapshot) {
+                        snackbar.setText(R.string.decompressing);
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                final File downloadFile = new File(samplePackDirectory, filename);
+                                try {
+                                    Utils.unzip(downloadFile, new File(samplePackDirectory, filename.replace(".zip","")));
+                                    downloadFile.delete();
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            Snackbar.make(findViewById(R.id.coordinator_layout), R.string.pack_install_complete, Snackbar.LENGTH_SHORT).show();
+                                            samplePackListAdapter.refresh();
+                                        }
+                                    });
+                                } catch (IOException e) {
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            snackbar.dismiss();
+                                            Snackbar.make(findViewById(R.id.coordinator_layout), R.string.unzip_error, Snackbar.LENGTH_SHORT).show();
+                                        }
+                                    });
+                                    e.printStackTrace();
+                                }
+
+                            }
+                        }).start();
+                    }
+                });
+            }
+        } else {
+            samplePackListAdapter.refresh();
         }
     }
 

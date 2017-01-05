@@ -71,6 +71,7 @@
     <string name="no_thanks">No thanks</string>
     <string name="dont_show_again">Don\'t show this again</string>
     <string name="dismiss">Dismiss</string>
+    <string name="hide">Hide</string>
 
     <!-- Error message strings -->
     <string name="error_sample_load">Error loading sample</string>
@@ -112,6 +113,10 @@
     <string name="auth_error">Authentication failed.  Please try again.</string>
     <string name="sign_out">Sign out</string>
     <string name="sign_out_success">Signed-out</string>
+    <string name="app_extras">App Extras</string>
+    <string name="owned_packs">Owned Packs</string>
+    <string name="no_purchase_records">No records of sample pack purchases found</string>
+    <string name="index_download_error">Unable to contact store</string>
 
     <!-- Strings for Sample Edit Activity main menu -->
     <string name="action_trim_wav">Trim to selection</string>

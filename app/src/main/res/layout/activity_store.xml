@@ -108,6 +108,14 @@
             android:layout_marginRight="@dimen/activity_horizontal_margin"
             android:layout_below="@id/my_toolbar"
             android:visibility="gone"/>
+        <TextView android:id="@+id/no_purchases_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:textColor="@color/text_primary_light"
+            android:textSize="16sp"
+            android:text="@string/no_purchase_records"
+            android:visibility="gone"/>
 </RelativeLayout>
     </android.support.design.widget.CoordinatorLayout>
     <com.google.android.gms.ads.AdView android:id="@+id/adView"

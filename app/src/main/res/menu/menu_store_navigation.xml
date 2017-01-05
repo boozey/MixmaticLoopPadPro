@@ -3,15 +3,15 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item android:id="@+id/nav_sample_packs"
-        android:title="Sample Packs"
+        android:title="@string/sample_packs"
         android:icon="@drawable/ic_sample_packs"
         app:showAsAction="ifRoom" />
     <item android:id="@+id/nav_app_extras"
-        android:title="App Extras"
+        android:title="@string/app_extras"
         android:icon="@drawable/ic_star_circle"
         app:showAsAction="ifRoom"/>
     <item android:id="@+id/nav_purchases"
-        android:title="Purchases"
+        android:title="@string/owned_packs"
         android:icon="@drawable/ic_orders"
         app:showAsAction="ifRoom"/>
 </menu>

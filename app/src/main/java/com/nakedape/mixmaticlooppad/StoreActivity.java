@@ -2,6 +2,7 @@ package com.nakedape.mixmaticlooppad;
 
 import android.animation.Animator;
 import android.animation.AnimatorSet;
+import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -24,6 +25,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.content.res.AppCompatResources;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -67,6 +69,7 @@ import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -164,50 +167,7 @@ public class StoreActivity extends AppCompatActivity {
         authStateListener = new FirebaseAuth.AuthStateListener() {
             @Override
             public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
-                FirebaseUser user = firebaseAuth.getCurrentUser();
-                if (user != null) {
-                    // User is signed in
-                    Log.d(LOG_TAG, "onAuthStateChanged:signed_in:" + user.getUid());
-
-                    // Setup storage references and download sample pack index
-                    packFolderRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks");
-                    StorageReference indexRef = packFolderRef.child("index.txt");
-
-                    final long ONE_MEGABYTE = 1024 * 1024;
-                    indexRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
-                        @Override
-                        public void onSuccess(byte[] bytes) {
-                            LoadStoreData(bytes);
-                            // Record Firebase event
-                            Bundle bundle = new Bundle();
-                            bundle.putString(FirebaseAnalytics.Param.ITEM_CATEGORY, "Sample Packs");
-                            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.VIEW_ITEM_LIST, bundle);
-                        }
-                    }).addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception exception) {
-                            // Handle any errors
-                            Log.e(LOG_TAG, "Index download error");
-                        }
-                    });
-
-                    // Download purchase list
-                    if (!user.isAnonymous()) {
-                        StorageReference purchasesRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/user/" + user.getUid() + "/purchases.txt");
-                        purchasesRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
-                            @Override
-                            public void onSuccess(byte[] bytes) {
-                                LoadPurchaseRec(bytes);
-                            }
-                        });
-                    } else {
-                        LoadLocalPurchaseRec();
-                    }
-
-                } else {
-                    // User is signed out
-                    Log.d(LOG_TAG, "onAuthStateChanged:signed_out");
-                }
+                handleAuthStateChange(firebaseAuth.getCurrentUser());
             }
         };
 
@@ -234,7 +194,7 @@ public class StoreActivity extends AppCompatActivity {
                             }
                         });
             }
-        } else {
+        } else if (!mAuth.getCurrentUser().isAnonymous()){
             // user is signed in!
             Toast.makeText(context, R.string.sign_in_success, Toast.LENGTH_SHORT).show();
             if (actionBar != null){
@@ -248,6 +208,11 @@ public class StoreActivity extends AppCompatActivity {
     @Override
     public void onStart() {
         super.onStart();
+    }
+
+    @Override
+    public void onResume(){
+        super.onResume();
         mAuth.addAuthStateListener(authStateListener);
     }
 
@@ -325,6 +290,26 @@ public class StoreActivity extends AppCompatActivity {
         else if (requestCode == RC_PURCHASE) {
             if (mBillingHelper != null)
                 mBillingHelper.handleActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
+    public boolean onKeyDown(int keycode, KeyEvent e) {
+        switch (keycode) {
+            case KeyEvent.KEYCODE_BACK:
+                if (downloadRef != null && downloadRef.getActiveDownloadTasks().size() > 0){
+                    FileDownloadTask task = downloadRef.getActiveDownloadTasks().get(0);
+                    if (task != null) {
+                        task.removeOnSuccessListener(onSuccessListener);
+                        Intent data = new Intent();
+                        data.putExtra(FB_STORAGE_REF, downloadRef.toString());
+                        data.putExtra(DOWNLOAD_FILENAME, downloadRef.getName());
+                        setResult(Activity.RESULT_OK, data);
+                    }
+                }
+                return super.onKeyDown(keycode, e);
+            default:
+                return super.onKeyDown(keycode, e);
         }
     }
 
@@ -433,6 +418,7 @@ public class StoreActivity extends AppCompatActivity {
         findViewById(R.id.adView).setVisibility(View.VISIBLE);
         if (getSupportActionBar() != null)getSupportActionBar().show();
     }
+
     // Store
     private MediaPlayer mediaPlayer;
     private Snackbar snackbar;
@@ -442,6 +428,7 @@ public class StoreActivity extends AppCompatActivity {
     private PurchasesListAdapter purchasesListAdapter;
     private int storeWindowSize = 5;
     private int storeIndex = 0;
+    private boolean purchasesShowing = false;
     private class SamplePackListAdapter extends BaseAdapter {
         private ArrayList<String> names;
         private ArrayList<String> titles;
@@ -449,6 +436,7 @@ public class StoreActivity extends AppCompatActivity {
         private ArrayList<String> skus;
         private ArrayList<String> bpms;
         private ArrayList<String> details;
+        private ArrayList<String> previewFilenames;
         private Context mContext;
         private int resource_id;
         private LayoutInflater mInflater;
@@ -463,6 +451,7 @@ public class StoreActivity extends AppCompatActivity {
             skus = new ArrayList<>();
             bpms = new ArrayList<>();
             details = new ArrayList<>();
+            previewFilenames = new ArrayList<>();
         }
 
         private void addPack(String name){
@@ -472,6 +461,7 @@ public class StoreActivity extends AppCompatActivity {
             skus.add(null);
             bpms.add(null);
             details.add(null);
+            previewFilenames.add(null);
             notifyDataSetChanged();
         }
 
@@ -485,6 +475,7 @@ public class StoreActivity extends AppCompatActivity {
                     bpms.set(index, br.readLine());
                     genres.set(index, br.readLine());
                     skus.set(index, br.readLine());
+                    previewFilenames.set(index, br.readLine());
                     String line;
                     StringBuilder text = new StringBuilder();
                     while ((line = br.readLine()) != null) {
@@ -567,7 +558,11 @@ public class StoreActivity extends AppCompatActivity {
                     buyButton.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            downloadPack(names.get(position));
+                            if (!isPurchasing)
+                                downloadPack(names.get(position));
+                            else
+                                Toast.makeText(context, "Please wait for transaction to finish before starting a new one", Toast.LENGTH_LONG).show();
+
                         }
                     });
                 } else {
@@ -575,7 +570,10 @@ public class StoreActivity extends AppCompatActivity {
                     buyButton.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            startPurchaseFlow(skus.get(position), names.get(position));
+                            if (!isPurchasing)
+                                startPurchaseFlow(skus.get(position), names.get(position));
+                            else
+                                Toast.makeText(context, "Please wait for transaction to finish before starting a new one", Toast.LENGTH_LONG).show();
                         }
                     });
                 }
@@ -593,7 +591,7 @@ public class StoreActivity extends AppCompatActivity {
                 prevButton.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-                            previewClick(names.get(position), titles.get(position));
+                            previewClick(previewFilenames.get(position), titles.get(position));
                     }
                 });
             } else {
@@ -635,10 +633,6 @@ public class StoreActivity extends AppCompatActivity {
             timeStamps.add(timeStamp);
             notifyDataSetChanged();
             Log.d(LOG_TAG, "Owned pack added");
-        }
-
-        private void addItem(String name){
-
         }
 
         @Override
@@ -1027,11 +1021,39 @@ public class StoreActivity extends AppCompatActivity {
     }
     private void showPurchases(){
         final ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
-        if (purchasesListAdapter == null){
-            purchasesListAdapter = new PurchasesListAdapter(context, R.layout.store_purchase_item);
-            purchasesList.setAdapter(purchasesListAdapter);
+        final TextView msgTextView = (TextView)rootLayout.findViewById(R.id.no_purchases_textview);
+        if (purchasesListAdapter == null || purchasesListAdapter.getCount() == 0){
+            if (msgTextView.getVisibility() != View.VISIBLE) {
+                purchasesList.setVisibility(View.GONE);
+                purchasesShowing = true;
+                AnimatorSet set = Animations.fadeIn(msgTextView, 200, 0);
+                set.addListener(new Animator.AnimatorListener() {
+                    @Override
+                    public void onAnimationStart(Animator animator) {
+                        msgTextView.setVisibility(View.VISIBLE);
+                    }
+
+                    @Override
+                    public void onAnimationEnd(Animator animator) {
+
+                    }
+
+                    @Override
+                    public void onAnimationCancel(Animator animator) {
+
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(Animator animator) {
+
+                    }
+                });
+                set.start();
+            }
         }
-        if (purchasesList.getVisibility() != View.VISIBLE){
+        else if (purchasesList.getVisibility() != View.VISIBLE){
+            purchasesShowing = true;
+            msgTextView.setVisibility(View.GONE);
             AnimatorSet set = Animations.fadeIn(purchasesList, 200, 0);
             set.addListener(new Animator.AnimatorListener() {
                 @Override
@@ -1058,7 +1080,9 @@ public class StoreActivity extends AppCompatActivity {
         }
     }
     private void hidePurchases(){
+        purchasesShowing = false;
         final ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
+        final View msgView = rootLayout.findViewById(R.id.no_purchases_textview);
         if (purchasesList.getVisibility() == View.VISIBLE){
             AnimatorSet set = Animations.fadeOut(purchasesList, 200, 0);
             set.addListener(new Animator.AnimatorListener() {
@@ -1084,8 +1108,33 @@ public class StoreActivity extends AppCompatActivity {
             });
             set.start();
         }
+        else if (msgView.getVisibility() == View.VISIBLE){
+            AnimatorSet set = Animations.fadeOut(msgView, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    msgView.setVisibility(View.GONE);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
     }
-    private void previewClick(String packName, final String packTitle){
+    private void previewClick(String prevFilename, final String packTitle){
         // Dismiss snackbar if necessary
         if (snackbar != null && snackbar.isShown())
             snackbar.dismiss();
@@ -1119,8 +1168,7 @@ public class StoreActivity extends AppCompatActivity {
         snackbar.show();
 
         // Prepare and start streaming
-        String previewName = packName.substring(0, packName.indexOf("bpm") + 3) + "_Preview.mp3";
-        StorageReference prevRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + previewName);
+        StorageReference prevRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks/" + prevFilename);
         prevRef.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
             @Override
             public void onSuccess(Uri uri) {
@@ -1251,14 +1299,15 @@ public class StoreActivity extends AppCompatActivity {
     }
     public void SignInClick(View v){
         FirebaseUser user = mAuth.getCurrentUser();
-        if (user == null)
-            startSignInFlow();
-        else if (user.isAnonymous())
+        if (user == null || user.isAnonymous())
             startSignInFlow();
         else
             signOut();
     }
     private void signOut(){
+        SharedPreferences.Editor editor = getSharedPreferences(ACCOUNT_PREFS, MODE_PRIVATE).edit();
+        editor.putBoolean(AUTO_SIGN_IN, false);
+        editor.apply();
         AuthUI.getInstance()
                 .signOut(this)
                 .addOnCompleteListener(new OnCompleteListener<Void>() {
@@ -1269,15 +1318,73 @@ public class StoreActivity extends AppCompatActivity {
                             TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
                             button.setText(R.string.sign_in);
                         }
-                        SharedPreferences.Editor editor = getSharedPreferences(ACCOUNT_PREFS, MODE_PRIVATE).edit();
-                        editor.putBoolean(AUTO_SIGN_IN, false);
-                        editor.apply();
                         Toast.makeText(context, R.string.sign_out_success, Toast.LENGTH_SHORT).show();
                     }
                 });
     }
+    private void handleAuthStateChange(FirebaseUser user){
+        if (user != null) {
+            // User is signed in
+            Log.d(LOG_TAG, "onAuthStateChanged:signed_in:" + user.getUid());
+
+            // Setup storage references and download sample pack index
+            packFolderRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks");
+            StorageReference indexRef = packFolderRef.child("index.txt");
+
+            final long ONE_MEGABYTE = 1024 * 1024;
+            indexRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
+                @Override
+                public void onSuccess(byte[] bytes) {
+                    LoadStoreData(bytes);
+                    // Record Firebase event
+                    Bundle bundle = new Bundle();
+                    bundle.putString(FirebaseAnalytics.Param.ITEM_CATEGORY, "Sample Packs");
+                    firebaseAnalytics.logEvent(FirebaseAnalytics.Event.VIEW_ITEM_LIST, bundle);
+                }
+            }).addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception exception) {
+                    // Handle any errors
+                    Log.e(LOG_TAG, "Index download error");
+                    Snackbar.make(rootLayout.findViewById(R.id.coordinator_layout), R.string.index_download_error, Snackbar.LENGTH_LONG);
+                }
+            });
+
+            // Download purchase list
+            if (!user.isAnonymous()) {
+                Log.d(LOG_TAG, "Downloading purchase record");
+                StorageReference purchasesRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/user/" + user.getUid() + "/purchases.txt");
+                purchasesRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
+                    @Override
+                    public void onSuccess(byte[] bytes) {
+                        Log.d(LOG_TAG, "Purchase record downloaded");
+                        LoadPurchaseRec(bytes);
+                        if (purchasesShowing) showPurchases();
+                    }
+                }).addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.d(LOG_TAG, "Error downloading purchase record: " + e.getMessage());
+                        if (purchasesShowing) showPurchases();
+                    }
+                });
+            } else {
+                LoadLocalPurchaseRec();
+                if (purchasesShowing) showPurchases();
+            }
+
+        } else {
+            // User is signed out
+            Log.d(LOG_TAG, "onAuthStateChanged:signed_out");
+            mAuth.signInAnonymously();
+            LoadLocalPurchaseRec();
+            if (purchasesShowing) showPurchases();
+        }
+    }
 
     // Purchase and download
+    public static final String FB_STORAGE_REF = "FB_STORAGE_REF";
+    public static final String DOWNLOAD_FILENAME = "DOWNLOAD_FILENAME";
     private IabHelper mBillingHelper;
     private static String RSA_STRING_1 = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjcQ7YSSmv5GSS3FrQ801508P/r5laGtv7GBG2Ax9ql6ZAJZI6UPrJIvN9gXjoRBnH",
             RSA_STRING_2 = "OIphIg9HycJRxBwGfgcpEQ3F47uWJ/UvmPeQ3cVffFKIb/cAUqCS4puEtcDL2yDXoKjagsJNBjbRWz6tqDvzH5BtvdYoy4QUf8NqH8wd3/2R/m3PAVIr+lRlUAc1Dj2y40uOEdluDW+i9kbkMD8vrLKr+DGnB7JrKFAPaqxBNTeogv",
@@ -1288,8 +1395,11 @@ public class StoreActivity extends AppCompatActivity {
     private static HashMap<String, String> packPriceList;
     private String savedSku, savedPackName;
     private boolean restartPurchaseFlow = false;
+    private StorageReference downloadRef;
 
     // Sample pack purchases
+    private OnSuccessListener<FileDownloadTask.TaskSnapshot> onSuccessListener;
+    private boolean isPurchasing = false;
     private void checkForUnconsumedPurchases(){
         try {
             mBillingHelper.queryInventoryAsync(new IabHelper.QueryInventoryFinishedListener() {
@@ -1319,8 +1429,10 @@ public class StoreActivity extends AppCompatActivity {
         } catch (IabHelper.IabAsyncInProgressException e) { e.printStackTrace(); }
     }
     private void downloadPack(final String name){
+        isPurchasing = true;
         final Snackbar snackbar = Snackbar.make(findViewById(R.id.coordinator_layout), getString(R.string.downloading, 0), Snackbar.LENGTH_INDEFINITE);
-        snackbar.setAction(R.string.dismiss, new View.OnClickListener() {
+        final WeakReference<Snackbar> snackbarReference = new WeakReference<>(snackbar);
+        snackbar.setAction(R.string.hide, new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 snackbar.dismiss();
@@ -1331,40 +1443,62 @@ public class StoreActivity extends AppCompatActivity {
         if (downloadFile.exists()) downloadFile.delete();
         try {
             downloadFile.createNewFile();
-            StorageReference downloadRef = packFolderRef.child(name + ".zip");
-            downloadRef.getFile(downloadFile).addOnProgressListener(new OnProgressListener<FileDownloadTask.TaskSnapshot>() {
+            onSuccessListener = new OnSuccessListener<FileDownloadTask.TaskSnapshot>() {
+                @Override
+                public void onSuccess(FileDownloadTask.TaskSnapshot taskSnapshot) {
+                    if (snackbarReference.get() != null) {
+                        snackbar.setText(R.string.decompressing);
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    Utils.unzip(downloadFile, new File(samplePackFolder, name));
+                                    downloadFile.delete();
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            isPurchasing = false;
+                                            snackbar.dismiss();
+                                            Snackbar.make(findViewById(R.id.coordinator_layout), R.string.pack_install_complete, Snackbar.LENGTH_SHORT).show();
+                                        }
+                                    });
+                                } catch (IOException e) {
+                                    isPurchasing = false;
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            snackbar.dismiss();
+                                            Snackbar.make(findViewById(R.id.coordinator_layout), R.string.unzip_error, Snackbar.LENGTH_SHORT).show();
+                                        }
+                                    });
+                                    e.printStackTrace();
+                                }
+
+                            }
+                        }).start();
+                    }
+                }
+            };
+            downloadRef = packFolderRef.child(name + ".zip");
+            downloadRef.getFile(downloadFile)
+                    .addOnProgressListener(new OnProgressListener<FileDownloadTask.TaskSnapshot>() {
                 @Override
                 public void onProgress(FileDownloadTask.TaskSnapshot taskSnapshot) {
                     snackbar.setText(getString(R.string.downloading, taskSnapshot.getBytesTransferred() * 100 / taskSnapshot.getTotalByteCount()));
                 }
-            }).addOnCompleteListener(new OnCompleteListener<FileDownloadTask.TaskSnapshot>() {
+            }).addOnSuccessListener(onSuccessListener)
+                    .addOnFailureListener(new OnFailureListener() {
                 @Override
-                public void onComplete(@NonNull Task<FileDownloadTask.TaskSnapshot> task) {
-                    snackbar.setText(R.string.decompressing);
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                Utils.unzip(downloadFile, new File(samplePackFolder, name));
-                                downloadFile.delete();
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        snackbar.dismiss();
-                                        Snackbar.make(findViewById(R.id.coordinator_layout), R.string.pack_install_complete, Snackbar.LENGTH_SHORT).show();
-                                    }
-                                });
-                            } catch (IOException e){
-                                snackbar.dismiss();
-                                Toast.makeText(context, R.string.unzip_error, Toast.LENGTH_SHORT).show();
-                                e.printStackTrace();
-                            }
-
-                        }
-                    }).start();
+                public void onFailure(@NonNull Exception e) {
+                    isPurchasing = false;
+                    if (snackbarReference.get() != null) {
+                        snackbar.dismiss();
+                        Snackbar.make(findViewById(R.id.coordinator_layout), R.string.download_error, Snackbar.LENGTH_SHORT).show();
+                    }
                 }
             });
         } catch (IOException e){
+            isPurchasing = false;
             snackbar.dismiss();
             e.printStackTrace();
             Toast.makeText(context, R.string.download_error, Toast.LENGTH_SHORT).show();
@@ -1417,7 +1551,7 @@ public class StoreActivity extends AppCompatActivity {
     }
     private void makeSamplePackPurchase(String uid, String sku, final String packName){
         restartPurchaseFlow = false;
-
+        isPurchasing = true;
         try {
             mBillingHelper.launchPurchaseFlow(this, sku, RC_PURCHASE,
                     new IabHelper.OnIabPurchaseFinishedListener() {
