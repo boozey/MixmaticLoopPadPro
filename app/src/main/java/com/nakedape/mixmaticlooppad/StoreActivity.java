@@ -31,6 +31,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebView;
 import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
@@ -136,18 +137,12 @@ public class StoreActivity extends AppCompatActivity {
             bar.setPadding(0, 0, 0, 0);
         }
 
-        // Check network connection
-        checkInternetConnection();
-
         // Initialize price list with default values
         packPriceList = new HashMap<>();
         packPriceList.put(SKU_TWO_DOLLAR_PACK, "$2.00");
 
         // Initialize Firebase Analytics
         firebaseAnalytics = FirebaseAnalytics.getInstance(context);
-
-        // In-app billing init
-        initializeIAB();
 
         // Initialize AdMob
         if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
@@ -213,12 +208,14 @@ public class StoreActivity extends AppCompatActivity {
     @Override
     public void onResume(){
         super.onResume();
+        checkInternetConnection();
         mAuth.addAuthStateListener(authStateListener);
     }
 
     @Override
     public void onStop() {
         super.onStop();
+        unregisterNetworkListener();
         if (authStateListener != null) {
             mAuth.removeAuthStateListener(authStateListener);
         }
@@ -239,7 +236,6 @@ public class StoreActivity extends AppCompatActivity {
             e.printStackTrace();
         }
         mBillingHelper = null;
-        unregisterNetworkListener();
     }
 
     @Override
@@ -267,7 +263,8 @@ public class StoreActivity extends AppCompatActivity {
                     firebaseAnalytics.logEvent(FirebaseAnalytics.Event.LOGIN, bundle);
 
                     if (restartPurchaseFlow) {
-                        makeSamplePackPurchase(user.getUid(), savedSku, savedPackName);
+                        //makeSamplePackPurchase(user.getUid(), savedSku, savedPackName);
+                        acceptLicense(user.getUid(), savedSku, savedPackName);
                     }
                 }
                 return;
@@ -297,6 +294,14 @@ public class StoreActivity extends AppCompatActivity {
     public boolean onKeyDown(int keycode, KeyEvent e) {
         switch (keycode) {
             case KeyEvent.KEYCODE_BACK:
+                if (rootLayout.findViewById(R.id.privacy_policy_popup) != null){
+                    hidePrivacyPolicyPopup();
+                    return true;
+                }
+                if (rootLayout.findViewById(R.id.create_account_popup) != null){
+                    hideCreateAccountPrompt();
+                    return true;
+                }
                 if (downloadRef != null && downloadRef.getActiveDownloadTasks().size() > 0){
                     FileDownloadTask task = downloadRef.getActiveDownloadTasks().get(0);
                     if (task != null) {
@@ -331,37 +336,41 @@ public class StoreActivity extends AppCompatActivity {
         cacheFolder = getCacheDir();
     }
     private void checkInternetConnection() {
-        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true) && br == null) {
+        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
             ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = cm.getActiveNetworkInfo();
             //should check null because in airplane mode it will be null
             if (netInfo == null || !netInfo.isConnected()) disableApp();
 
-            br = new BroadcastReceiver() {
+            if (br == null) {
+                br = new BroadcastReceiver() {
 
-                @Override
-                public void onReceive(Context context, Intent intent) {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
 
-                    Bundle extras = intent.getExtras();
+                        Bundle extras = intent.getExtras();
 
-                    NetworkInfo info = (NetworkInfo) extras
-                            .getParcelable("networkInfo");
+                        NetworkInfo info = (NetworkInfo) extras
+                                .getParcelable("networkInfo");
 
-                    if (info != null) {
-                        NetworkInfo.State state = info.getState();
+                        if (info != null) {
+                            NetworkInfo.State state = info.getState();
 
-                        if (state == NetworkInfo.State.CONNECTED) {
-                            enableApp();
-                            //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
+                            if (state == NetworkInfo.State.CONNECTED) {
+                                enableApp();
+                                initializeIAB();
+                                //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
 
-                        } else if(appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
-                            disableApp();
-                            //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                            } else if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+                                disableApp();
+                                disposeIAB();
+                                //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
+                            }
                         }
-                    }
 
-                }
-            };
+                    }
+                };
+            }
 
             final IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -385,6 +394,18 @@ public class StoreActivity extends AppCompatActivity {
                 querySkuDetails();
             }
         });
+    }
+    private void disposeIAB(){
+        // Disposed when finished and when network is disconnected
+        if (mBillingHelper != null){
+            try {
+                mBillingHelper.dispose();
+            } catch (IabHelper.IabAsyncInProgressException e){
+                e.printStackTrace();
+            }
+            mBillingHelper = null;
+            Log.d(LOG_TAG, "mBillingHelper disposed");
+        }
     }
     private void unregisterNetworkListener(){
         if (br != null)
@@ -553,7 +574,7 @@ public class StoreActivity extends AppCompatActivity {
                 priceView.setText(packPriceList.get(skus.get(position)));
 
                 buyButton.setVisibility(View.VISIBLE);
-                if ((ownedPacks != null && ownedPacks.contains(names.get(position))) || BuildConfig.DEBUG){
+                if ((ownedPacks != null && ownedPacks.contains(names.get(position)))){
                     buyButton.setText(R.string.download);
                     buyButton.setOnClickListener(new View.OnClickListener() {
                         @Override
@@ -1288,14 +1309,93 @@ public class StoreActivity extends AppCompatActivity {
                 set.start();
                 if (restartPurchaseFlow){
                     FirebaseUser user = mAuth.getCurrentUser();
-                    if (user != null)
-                        makeSamplePackPurchase(user.getUid(), savedSku, savedPackName);
+                    if (user != null) {
+                        //makeSamplePackPurchase(user.getUid(), savedSku, savedPackName);
+                        acceptLicense(user.getUid(), savedSku, savedPackName);
+                    }
                 }
             }
         });
 
         rootLayout.addView(layout);
         Animations.slideUp(layout, 200, 0, rootLayout.getHeight() / 3).start();
+    }
+    private void hideCreateAccountPrompt(){
+        final View layout = rootLayout.findViewById(R.id.create_account_popup);
+        if (layout != null) {
+            AnimatorSet set = Animations.slideOutDown(layout, 200, 0, rootLayout.getHeight() / 3);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    rootLayout.removeView(layout);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animation) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animation) {
+
+                }
+            });
+            set.start();
+        }
+    }
+    public void ShowPrivacyPolicyPopup(View v){
+        LayoutInflater inflater = getLayoutInflater();
+        View popup = inflater.inflate(R.layout.privacy_policy_popup, null);
+
+        WebView webView = (WebView)popup.findViewById(R.id.webView);
+        webView.loadUrl(getString(R.string.privacy_policy_url));
+
+        Button button = (Button)popup.findViewById(R.id.yes_button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                hidePrivacyPolicyPopup();
+            }
+        });
+
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        params.addRule(RelativeLayout.BELOW, R.id.my_toolbar);
+        params.addRule(RelativeLayout.ABOVE, R.id.adView);
+        rootLayout.addView(popup, params);
+        Animations.fadeIn(popup, 200, 0).start();
+    }
+    private void hidePrivacyPolicyPopup(){
+        final View popup = rootLayout.findViewById(R.id.privacy_policy_popup);
+        if (popup != null) {
+            AnimatorSet set = Animations.fadeOut(popup, 200, 0);
+            set.addListener(new Animator.AnimatorListener() {
+                @Override
+                public void onAnimationStart(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animator) {
+                    rootLayout.removeView(popup);
+                }
+
+                @Override
+                public void onAnimationCancel(Animator animator) {
+
+                }
+
+                @Override
+                public void onAnimationRepeat(Animator animator) {
+
+                }
+            });
+            set.start();
+        }
     }
     public void SignInClick(View v){
         FirebaseUser user = mAuth.getCurrentUser();
@@ -1398,6 +1498,7 @@ public class StoreActivity extends AppCompatActivity {
     private StorageReference downloadRef;
 
     // Sample pack purchases
+    private static final String LICENSE_ACCEPTED = "LICENSE_ACCEPTED";
     private OnSuccessListener<FileDownloadTask.TaskSnapshot> onSuccessListener;
     private boolean isPurchasing = false;
     private void checkForUnconsumedPurchases(){
@@ -1546,7 +1647,93 @@ public class StoreActivity extends AppCompatActivity {
             showCreateAccountPrompt();
 
         } else {
-            makeSamplePackPurchase(user.getUid(), sku, packName);
+            //makeSamplePackPurchase(user.getUid(), sku, packName);
+            acceptLicense(user.getUid(), sku, packName);
+        }
+    }
+    private void acceptLicense(final String uid, final String sku, final String packName){
+        if (!appPrefs.getBoolean(LICENSE_ACCEPTED, false)) {
+            final View layout = getLayoutInflater().inflate(R.layout.license_agreement_popup, null);
+
+            // Prepare popup window
+            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            layout.setLayoutParams(params);
+            layout.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    return true;
+                }
+            });
+
+            Button yesButton = (Button) layout.findViewById(R.id.yes_button);
+            yesButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    AnimatorSet set = Animations.slideOutDown(layout, 200, 0, rootLayout.getHeight() / 3);
+                    set.addListener(new Animator.AnimatorListener() {
+                        @Override
+                        public void onAnimationStart(Animator animation) {
+
+                        }
+
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            rootLayout.removeView(layout);
+                        }
+
+                        @Override
+                        public void onAnimationCancel(Animator animation) {
+
+                        }
+
+                        @Override
+                        public void onAnimationRepeat(Animator animation) {
+
+                        }
+                    });
+                    set.start();
+                    SharedPreferences.Editor editor = appPrefs.edit();
+                    editor.putBoolean(LICENSE_ACCEPTED, true);
+                    editor.apply();
+                    makeSamplePackPurchase(uid, sku, packName);
+                }
+            });
+
+            Button noButton = (Button) layout.findViewById(R.id.no_button);
+            noButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    AnimatorSet set = Animations.slideOutDown(layout, 200, 0, rootLayout.getHeight() / 3);
+                    set.addListener(new Animator.AnimatorListener() {
+                        @Override
+                        public void onAnimationStart(Animator animation) {
+
+                        }
+
+                        @Override
+                        public void onAnimationEnd(Animator animation) {
+                            rootLayout.removeView(layout);
+                        }
+
+                        @Override
+                        public void onAnimationCancel(Animator animation) {
+
+                        }
+
+                        @Override
+                        public void onAnimationRepeat(Animator animation) {
+
+                        }
+                    });
+                    set.start();
+                }
+            });
+
+            rootLayout.addView(layout);
+            Animations.slideUp(layout, 200, 0, rootLayout.getHeight() / 3).start();
+        }
+        else {
+            makeSamplePackPurchase(uid, sku, packName);
         }
     }
     private void makeSamplePackPurchase(String uid, String sku, final String packName){
@@ -1558,6 +1745,7 @@ public class StoreActivity extends AppCompatActivity {
                         @Override
                         public void onIabPurchaseFinished(IabResult result, Purchase info) {
                             if (result.isFailure()) {
+                                isPurchasing = false;
                                 Log.e(LOG_TAG, "Error purchasing: " + result);
                                 Toast.makeText(context, getString(R.string.purchase_error, result.getMessage()), Toast.LENGTH_LONG).show();
                                 return;
@@ -1578,19 +1766,24 @@ public class StoreActivity extends AppCompatActivity {
                                 mBillingHelper.consumeAsync(info, new IabHelper.OnConsumeFinishedListener() {
                                     @Override
                                     public void onConsumeFinished(Purchase purchase, IabResult result) {
-                                        if (! result.isSuccess()) return;
+                                        if (! result.isSuccess()) {
+                                            isPurchasing = false;
+                                            return;
+                                        }
                                         // Download pack
                                         Log.i(LOG_TAG, "Purchase consumed");
                                         downloadPack(packName);
                                     }
                                 });
                             } catch (IabHelper.IabAsyncInProgressException e){
+                                isPurchasing = false;
                                 e.printStackTrace();
                             }
 
                         }
                     }, uid);
         } catch (IabHelper.IabAsyncInProgressException e){
+            isPurchasing = false;
             e.printStackTrace();
         }
     }

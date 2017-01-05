@@ -104,6 +104,7 @@
     <string name="account_explanation">Sign in with your email address or Google account.
         This will keep track of your purchases across devices and allow you to re-download sample packs.
         Without an account, you will be responsible for saving or transferring any files that have been purchased and downloaded.</string>
+    <string name="privacy_policy_underlined"><u>Privacy Policy</u></string>
     <string name="store_error_msg">Unable to contact Google Billing</string>
     <string name="purchase_error">Error making purchase: + %1$s</string>
     <string name="unzip_error">Error decompressing. Try downloading again.</string>
@@ -117,6 +118,10 @@
     <string name="owned_packs">Owned Packs</string>
     <string name="no_purchase_records">No records of sample pack purchases found</string>
     <string name="index_download_error">Unable to contact store</string>
+    <string name="license_agreement_popup_title">License Agreement</string>
+    <string name="license_agreement">The sounds, samples, loops and effects provided by Mixmatic Loop Pad are licensed to you on a royalty-free basis. This means that you can use the projects created in the app and use your projects for commercial and non-commercial purposes. The individual sounds included in the projects may not be resold as individual products.</string>
+    <string name="accept_license_agreement">I accept</string>
+    <string name="reject_license_agreement">I do not accept</string>
 
     <!-- Strings for Sample Edit Activity main menu -->
     <string name="action_trim_wav">Trim to selection</string>

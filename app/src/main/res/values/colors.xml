@@ -5,6 +5,7 @@
     <color name="transparent">#00000000</color>
     <color name="red">#FF0000</color>
     <color name="black">#000000</color>
+    <color name="blue">#0000FF</color>
 
     <color name="primary">@color/md_grey_800</color>
     <color name="primary_dark">@color/md_grey_900</color>
