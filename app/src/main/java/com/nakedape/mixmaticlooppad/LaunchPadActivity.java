@@ -188,6 +188,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         PreferenceManager.setDefaultValues(this, R.xml.sample_edit_preferences, true);
         activityPrefs = PreferenceManager.getDefaultSharedPreferences(this);
         activityPrefs.registerOnSharedPreferenceChangeListener(this);
+        /*SharedPreferences.Editor editor = activityPrefs.edit();
+        editor.putBoolean(SHOW_ADS, true);
+        editor.commit();*/
 
         new Thread(new Runnable() {
             @Override
@@ -245,14 +248,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
 
         if (isFinishing()) {
             // Release audiotrack resources
-            for (Integer i : activePads) {
-                Sample s = samples.get(i);
-                isPlaying = false;
-                if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
-                    s.stop();
-                }
-                s.audioTrack.release();
-            }
+            releaseAudioTracks();
         }
         super.onStop();
     }
@@ -273,6 +269,16 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         savedData.sampleLengths = sampleListAdapter.sampleLengths;
         savedData.showRemoveAdsPrompt = showRemoveAdsPrompt;
         savedData.interactionCount = interactionCount;
+
+        unregisterNetworkListener();
+        if (progressDialog != null)
+            if (progressDialog.isShowing())
+                progressDialog.cancel();
+
+        stopCounterThread = true;
+        stopPlaybackThread = true;
+        // Release audiotrack resources
+        releaseAudioTracks();
         super.onDestroy();
     }
     @Override
@@ -571,7 +577,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             launchQueue = savedData.getLaunchQueue();
             showRemoveAdsPrompt = savedData.showRemoveAdsPrompt;
             interactionCount = savedData.interactionCount;
-            Log.d(LOG_TAG, "Retained frag data loaded");
             // Setup touch pads from retained fragment
             runOnUiThread(new Runnable() {
                 @Override
@@ -582,6 +587,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     setupPadsFromFrag();
                     //updatePadOverlay();
                     if (isEditMode) showToolBar();
+                    if (isRecording) startTimeOutTimer();
                     if (isPlaying || isRecording)
                         new Thread(new CounterThread()).start();
                 }
@@ -718,8 +724,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
     }
     private void setupPadsFromFile() {
-        samples = new SparseArray<Sample>(24);
-        activePads = new ArrayList<Integer>(24);
+        Log.d(LOG_TAG, "setupPadsFromFile");
+        if (samples != null) {
+            releaseAudioTracks();
+            Log.d(LOG_TAG, "audiotracks released");
+        }
+        samples = new SparseArray<>(24);
+        activePads = new ArrayList<>(24);
         int padInt = 1;
         for (int id : touchPadIds){
             final TouchPad pad = (TouchPad)rootLayout.findViewById(id);
@@ -786,6 +797,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 }
             }).start();
         else {
+            Log.d(LOG_TAG, "setupPadsFromFrag");
             int padIndex = 1;
             for (int id : touchPadIds) {
                 Sample sample;
@@ -814,11 +826,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
     }
     private void checkInternetConnection() {
-        if (activityPrefs.getBoolean(SHOW_ADS, true)) {
             ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = cm.getActiveNetworkInfo();
             //should check null because in airplane mode it will be null
-            if (netInfo == null || !netInfo.isConnected()) disableApp();
+            if ((netInfo == null || !netInfo.isConnected()) && activityPrefs.getBoolean(SHOW_ADS, true)) disableApp();
 
             if (br == null) {
                 br = new BroadcastReceiver() {
@@ -853,12 +864,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             final IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
             registerReceiver((BroadcastReceiver) br, intentFilter);
-        }
     }
     private void unregisterNetworkListener(){
-        if (br != null) {
-            unregisterReceiver(br);
-        }
+            if (br != null) {
+                try {
+                unregisterReceiver(br);
+                } catch (IllegalArgumentException e) { e.printStackTrace(); }
+            }
     }
     private void disableApp(){
         if (rootLayout != null && rootLayout.findViewById(R.id.no_network_overlay) == null) {
@@ -888,7 +900,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         isAppDisabled = false;
     }
     private void setupPadsFromAssets(){
+        Log.d(LOG_TAG, "setupPadsFromFile");
         SharedPreferences.Editor prefEditor = launchPadprefs.edit();
+        if (samples != null) releaseAudioTracks();
         samples = new SparseArray<>(24);
         activePads = new ArrayList<>(24);
         int padInt = 1;
@@ -1166,6 +1180,18 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         });
         AlertDialog dialog = builder.create();
         dialog.show();
+    }
+    private void releaseAudioTracks(){
+        // Release audiotrack resources
+        Log.d(LOG_TAG, "Releasing audiotrack resources");
+        for (Integer i : activePads) {
+            Sample s = samples.get(i);
+            isPlaying = false;
+            if (s.audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
+                s.stop();
+            }
+            s.audioTrack.release();
+        }
     }
 
     // Touch pad helper methods
@@ -1587,7 +1613,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         String filename = path.substring(path.lastIndexOf(File.pathSeparatorChar) + 1).toLowerCase();
         String bpmString = "";
         int bpmIndex = filename.indexOf("bpm");
-        for (int i = bpmIndex - 5; i < bpmIndex; i++){
+        for (int i = Math.max(0, bpmIndex - 5); i < bpmIndex; i++){
             if (Character.isDigit(filename.charAt(i)))
                 bpmString += filename.charAt(i);
         }
@@ -2216,7 +2242,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         private int groupResourceId, childResourceId;
         private ArrayList<String> folderNames;
         private HashMap<String, ArrayList<String>> fileNames;
-        private String samplePackName;
+        private String samplePackName, playingSampleName;
         private View currentlyPlayingButton, previousView;
         private boolean isAssetPack = false;
 
@@ -2237,15 +2263,15 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                         try {
                             isAssetPack = true;
                             folderNames = new ArrayList<>(Arrays.asList(getAssets().list(STARTER_PACK_NAME)));
+                            for (String folder : folderNames){
+                                fileNames.put(folder, new ArrayList<>(Arrays.asList(getAssets().list(STARTER_PACK_NAME + "/" + folder))));
+                            }
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
                                     notifyDataSetChanged();
                                 }
                             });
-                            for (String folder : folderNames){
-                                fileNames.put(folder, new ArrayList<>(Arrays.asList(getAssets().list(STARTER_PACK_NAME + "/" + folder))));
-                            }
                         } catch (IOException e){
                             e.printStackTrace();
                         }
@@ -2316,12 +2342,15 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             TextView filenameView = (TextView)convertView.findViewById(R.id.sample_file_name);
             filenameView.setText(fileNames.get(folderNames.get(groupPosition)).get(childPosition));
             ImageView pauseButton = (ImageView)convertView.findViewById(R.id.pause_icon);
+            if (playingSampleName != null && playingSampleName.equals(getChild(groupPosition, childPosition)))
+                pauseButton.setSelected(true);
+            else
+                pauseButton.setSelected(false);
             pauseButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(final View v) {
                     if (currentlyPlayingButton != null && !currentlyPlayingButton.equals(v)) currentlyPlayingButton.setSelected(false);
                     currentlyPlayingButton = v;
-                    if (previousView != null) v.setActivated(false);
                     if (v.isSelected()){
                         v.setSelected(false);
                         if (samplePlayer != null) {
@@ -2330,6 +2359,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                             samplePlayer = null;
                         }
                     } else {
+                        playingSampleName = getChild(groupPosition, childPosition);
                         v.setSelected(true);
                         if (samplePlayer != null) {
                             if (samplePlayer.isPlaying())
@@ -2349,6 +2379,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                                 @Override
                                 public void onCompletion(MediaPlayer mp) {
                                     currentlyPlayingButton.setSelected(false);
+                                    playingSampleName = null;
                                     samplePlayer.release();
                                     samplePlayer = null;
                                 }
@@ -2797,7 +2828,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 });
             }
         } else {
-            samplePackListAdapter.refresh();
+           if(samplePackListAdapter != null) samplePackListAdapter.refresh();
         }
     }
 
@@ -3035,6 +3066,28 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 launchQueue.remove(e);
                 break;
             }
+        }
+    }
+    private void startTimeOutTimer(){
+        if (timeOutTimer == null) {
+            timeOutTimer = new Timer();
+            timeOutTimer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+                    boolean isTouched = false;
+                    for (int i : activePads) {
+                        isTouched = isTouched || samples.get(i).audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING;
+                    }
+                    if (!isTouched) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                stopPlayBack();
+                            }
+                        });
+                    }
+                }
+            }, 8000, 8000);
         }
     }
 
@@ -4201,8 +4254,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             this.loop = loop;
             if (loop) {
                 loopMode = -1;
+                /*
                 if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED)
-                    reloadAudioTrack();
+                    reloadAudioTrack();*/
 
                 audioTrack.setLoopPoints(0, sampleByteLength / 4 + 1, -1);
                 audioTrack.setNotificationMarkerPosition(0);
@@ -4336,13 +4390,14 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
         public void reloadAudioTrack() {
             //Log.d(LOG_TAG, "sampleByteLength = " + sampleByteLength);
+            Log.d(LOG_TAG, "reloadAudioTrack, isAssetFile = " + isAssetFile);
             audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,
                     sampleRate,
                     AudioFormat.CHANNEL_OUT_STEREO,
                     AudioFormat.ENCODING_PCM_16BIT,
                     2*sampleByteLength,
                     AudioTrack.MODE_STATIC, id);
-            if (runtime.totalMemory() + (sampleByteLength - runtime.freeMemory()) < runtime.maxMemory() * 0.9) {
+            if (runtime.totalMemory() + (2*sampleByteLength - runtime.freeMemory()) < runtime.maxMemory() * 0.9) {
                 InputStream stream = null;
                 try {
                     if (isAssetFile){

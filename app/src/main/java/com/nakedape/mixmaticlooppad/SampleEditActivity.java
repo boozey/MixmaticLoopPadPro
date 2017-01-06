@@ -150,12 +150,12 @@ public class SampleEditActivity extends AppCompatActivity {
 
         Toolbar toolbar = (Toolbar)rootLayout.findViewById(R.id.my_toolbar);
         toolbar.setOverflowIcon(AppCompatResources.getDrawable(this, R.drawable.ic_action_navigation_more_vert));
-        toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
+        //toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
         setSupportActionBar(toolbar);
         ActionBar actionBar = getSupportActionBar();
-        if (actionBar != null) {
+        /*if (actionBar != null) {
             actionBar.setDisplayHomeAsUpEnabled(true);
-        }
+        }*/
 
         // Firebase analytics
         firebaseAnalytics = FirebaseAnalytics.getInstance(context);

@@ -122,11 +122,11 @@ public class StoreActivity extends AppCompatActivity {
 
         // Setup toolbar
         Toolbar toolbar = (Toolbar) findViewById(R.id.my_toolbar);
-        toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
+        //toolbar.setNavigationIcon(AppCompatResources.getDrawable(this, R.drawable.ic_navigation_arrow_back));
         setSupportActionBar(toolbar);
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) {
-            actionBar.setDisplayHomeAsUpEnabled(true);
+            //actionBar.setDisplayHomeAsUpEnabled(true);
             actionBar.setDisplayShowTitleEnabled(false);
             actionBar.setCustomView(R.layout.store_action_bar_custom_view);
             actionBar.setDisplayShowCustomEnabled(true);
@@ -139,7 +139,7 @@ public class StoreActivity extends AppCompatActivity {
 
         // Initialize price list with default values
         packPriceList = new HashMap<>();
-        packPriceList.put(SKU_TWO_DOLLAR_PACK, "$2.00");
+        packPriceList.put(SKU_TWO_DOLLAR_PACK, "");
 
         // Initialize Firebase Analytics
         firebaseAnalytics = FirebaseAnalytics.getInstance(context);
@@ -336,7 +336,6 @@ public class StoreActivity extends AppCompatActivity {
         cacheFolder = getCacheDir();
     }
     private void checkInternetConnection() {
-        if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
             ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = cm.getActiveNetworkInfo();
             //should check null because in airplane mode it will be null
@@ -361,7 +360,7 @@ public class StoreActivity extends AppCompatActivity {
                                 initializeIAB();
                                 //Toast.makeText(getApplicationContext(), "Internet connection is on", Toast.LENGTH_LONG).show();
 
-                            } else if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
+                            } else  {
                                 disableApp();
                                 disposeIAB();
                                 //Toast.makeText(getApplicationContext(), "Internet connection is Off", Toast.LENGTH_LONG).show();
@@ -375,7 +374,6 @@ public class StoreActivity extends AppCompatActivity {
             final IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
             registerReceiver((BroadcastReceiver) br, intentFilter);
-        }
     }
     private void initializeIAB(){
         String base64EncodedPublicKey = RSA_STRING_1 + RSA_STRING_2 + RSA_STRING_3;
@@ -574,7 +572,7 @@ public class StoreActivity extends AppCompatActivity {
                 priceView.setText(packPriceList.get(skus.get(position)));
 
                 buyButton.setVisibility(View.VISIBLE);
-                if ((ownedPacks != null && ownedPacks.contains(names.get(position)))){
+                if ((ownedPacks != null && ownedPacks.contains(names.get(position))) || BuildConfig.DEBUG){
                     buyButton.setText(R.string.download);
                     buyButton.setOnClickListener(new View.OnClickListener() {
                         @Override
@@ -1490,7 +1488,11 @@ public class StoreActivity extends AppCompatActivity {
             RSA_STRING_2 = "OIphIg9HycJRxBwGfgcpEQ3F47uWJ/UvmPeQ3cVffFKIb/cAUqCS4puEtcDL2yDXoKjagsJNBjbRWz6tqDvzH5BtvdYoy4QUf8NqH8wd3/2R/m3PAVIr+lRlUAc1Dj2y40uOEdluDW+i9kbkMD8vrLKr+DGnB7JrKFAPaqxBNTeogv",
             RSA_STRING_3 = "0vGNOWwJd3Tgx7VDm825Op/vyG9VQSM7W53TsyJE8NdwP8Q59B/WRlcsr+tHCyoQcjscrgVegiOyME1DfEUrQk/SPzr5AlCqa2AZ//wIDAQAB";
     private static int RC_PURCHASE = 1002;
+    private static final String SKU_ONE_DOLLAR_PACK = "one_dollar_pack";
     private static final String SKU_TWO_DOLLAR_PACK = "two_dollar_pack";
+    private static final String SKU_THREE_DOLLAR_PACK = "three_dollar_pack";
+    private static final String SKU_FOUR_DOLLAR_PACK = "four_dollar_pack";
+    private static final String SKU_FIVE_DOLLAR_PACK = "five_dollar_pack";
     private static final String SKU_REMOVE_ADS = "remove_ads";
     private static HashMap<String, String> packPriceList;
     private String savedSku, savedPackName;
@@ -1608,7 +1610,11 @@ public class StoreActivity extends AppCompatActivity {
     private void querySkuDetails(){
         // Access IAB SKU details
         ArrayList<String> additionalSkuList = new ArrayList<>();
+        additionalSkuList.add(SKU_ONE_DOLLAR_PACK);
         additionalSkuList.add(SKU_TWO_DOLLAR_PACK);
+        additionalSkuList.add(SKU_THREE_DOLLAR_PACK);
+        additionalSkuList.add(SKU_FOUR_DOLLAR_PACK);
+        additionalSkuList.add(SKU_FIVE_DOLLAR_PACK);
         additionalSkuList.add(SKU_REMOVE_ADS);
         try {
             mBillingHelper.queryInventoryAsync(true, additionalSkuList, null, new IabHelper.QueryInventoryFinishedListener() {
@@ -1620,7 +1626,11 @@ public class StoreActivity extends AppCompatActivity {
                         return;
                     }
 
+                    packPriceList.put(SKU_ONE_DOLLAR_PACK, inv.getSkuDetails(SKU_ONE_DOLLAR_PACK).getPrice());
                     packPriceList.put(SKU_TWO_DOLLAR_PACK, inv.getSkuDetails(SKU_TWO_DOLLAR_PACK).getPrice());
+                    packPriceList.put(SKU_THREE_DOLLAR_PACK, inv.getSkuDetails(SKU_THREE_DOLLAR_PACK).getPrice());
+                    packPriceList.put(SKU_FOUR_DOLLAR_PACK, inv.getSkuDetails(SKU_FOUR_DOLLAR_PACK).getPrice());
+                    packPriceList.put(SKU_FIVE_DOLLAR_PACK, inv.getSkuDetails(SKU_FIVE_DOLLAR_PACK).getPrice());
                     if (samplePackListAdapter != null) samplePackListAdapter.notifyDataSetChanged();
 
                     ((TextView)rootLayout.findViewById(R.id.remove_ads_price_view)).setText(inv.getSkuDetails(SKU_REMOVE_ADS).getPrice());
