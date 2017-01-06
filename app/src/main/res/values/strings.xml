@@ -41,6 +41,12 @@
     <string name="library_tip_3">Create your own samples from your music collection or the built-in microphone by pressing the + icon</string>
     <string name="library_tip_4">Preview a sample by pressing the wave icon\n\nLong press a sample to drag it to a touchpad</string>
     <string name="demo_sample_uneditable">Demo samples included with the app cannot be edited</string>
+    <!-- Toolbar descriptions-->
+    <string name="edit_sample">Edit sample</string>
+    <string name="loop">Loop</string>
+    <string name="quant_mode">Quantization mode</string>
+    <string name="color">Color</string>
+    <string name="remove_sample">Remove sample from layout</string>
 
 
     <!-- Main loop pad activity menu -->
@@ -112,7 +118,7 @@
     <string name="sign_in_success">Signed-in</string>
     <string name="network_error">Unable to sign-in.  Check network connection.</string>
     <string name="auth_error">Authentication failed.  Please try again.</string>
-    <string name="sign_out">Sign out</string>
+    <string name="sign_out"><u>Sign out</u></string>
     <string name="sign_out_success">Signed-out</string>
     <string name="app_extras">App Extras</string>
     <string name="owned_packs">Owned Packs</string>

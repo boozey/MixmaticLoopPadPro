@@ -160,8 +160,7 @@ public class SampleEditActivity extends AppCompatActivity {
         // Firebase analytics
         firebaseAnalytics = FirebaseAnalytics.getInstance(context);
         Bundle bundle = new Bundle();
-        bundle.putString(FirebaseAnalytics.Param.ITEM_ID, "SampleEditActivity");
-        firebaseAnalytics.logEvent("ACTIVITY_START", bundle);
+        firebaseAnalytics.logEvent("SAMPLE_EDIT_ACTIVITY_START", bundle);
 
         // Admob
         if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true)) {
@@ -939,6 +938,10 @@ public class SampleEditActivity extends AppCompatActivity {
                         public void run() {
                             hideProgressPopup();
                             if (!saveSlice){
+                                // Record Firebase event
+                                Bundle bundle = new Bundle();
+                                firebaseAnalytics.logEvent("CREATE_SAMPLE", bundle);
+
                                 Intent result = new Intent("com.nakedape.mixmaticlooppad.RESULT_ACTION", Uri.parse(sampleFile.getAbsolutePath()));
                                 result.putExtra(LaunchPadActivity.TOUCHPAD_ID, sampleId);
                                 result.putExtra(LaunchPadActivity.COLOR, sampleView.color);

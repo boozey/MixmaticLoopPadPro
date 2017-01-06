@@ -14,7 +14,8 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Edit sample"/>
+            android:textSize="12sp"
+            android:text="@string/edit_sample"/>
     </FrameLayout>
     <FrameLayout
         android:layout_width="wrap_content"
@@ -26,7 +27,8 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Loop"/>
+            android:textSize="12sp"
+            android:text="@string/loop"/>
     </FrameLayout>
     <FrameLayout
         android:layout_width="wrap_content"
@@ -38,7 +40,8 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Launch mode"/>
+            android:textSize="12sp"
+            android:text="@string/action_launch_mode"/>
     </FrameLayout>
     <FrameLayout
         android:layout_width="wrap_content"
@@ -50,7 +53,8 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Volume"/>
+            android:textSize="12sp"
+            android:text="@string/action_set_volume"/>
     </FrameLayout>
     <FrameLayout
         android:layout_width="wrap_content"
@@ -62,7 +66,8 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Quantization mode"/>
+            android:textSize="12sp"
+            android:text="@string/quant_mode"/>
     </FrameLayout>
     <FrameLayout
         android:layout_width="wrap_content"
@@ -74,7 +79,8 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Color"/>
+            android:textSize="12sp"
+            android:text="@string/color"/>
     </FrameLayout>
     <FrameLayout
         android:layout_width="wrap_content"
@@ -86,6 +92,7 @@
             android:padding="2dp"
             android:background="@drawable/rounded_corner_2dp_accent"
             android:textColor="@color/text_primary_light"
-            android:text="Remove sample from layout"/>
+            android:textSize="12sp"
+            android:text="@string/remove_sample"/>
     </FrameLayout>
 </LinearLayout>

@@ -75,6 +75,7 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.InterstitialAd;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.storage.FileDownloadTask;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.OnProgressListener;
@@ -173,7 +174,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d(LOG_TAG, "onCreate()");
+        Log("onCreate()");
         if (savedInstanceState != null){
             counter = savedInstanceState.getLong(COUNTER_STATE, 0);
         }
@@ -202,12 +203,12 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     @Override
     public void onStart(){
         super.onStart();
-        Log.d(LOG_TAG, "onStart()");
+        Log("onStart()");
     }
     @Override
     public void onResume() {
         super.onResume();
-        Log.d(LOG_TAG, "onResume()");
+        Log("onResume()");
         stopCounterThread = false;
         stopPlaybackThread = false;
         checkInternetConnection();
@@ -215,7 +216,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     @Override
     public void onPause(){
         super.onPause();
-        Log.d(LOG_TAG, "onPause()");
+        Log("onPause()");
 
         if (samplePlayer != null){
             if (samplePlayer.isPlaying()) {
@@ -237,7 +238,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     @Override
     public void onStop(){
-        Log.d(LOG_TAG, "onStop()");
+        Log("onStop()");
         unregisterNetworkListener();
         if (progressDialog != null)
             if (progressDialog.isShowing())
@@ -254,7 +255,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     @Override
     protected void onDestroy(){
-        Log.d(LOG_TAG, "onDestroy()");
+        Log("onDestroy()");
         savedData.setSamples(samples);
         savedData.setCounter(counter);
         savedData.setEditMode(isEditMode);
@@ -455,9 +456,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     private BroadcastReceiver br;
     private boolean isFirstRun = false;
     private boolean isAppDisabled = false;
+    private FirebaseAnalytics firebaseAnalytics;
     private void loadInBackground() {
         // Instance of runtime to check memory use
         runtime = Runtime.getRuntime();
+
+        // Initialize Firebase Analytics
+        firebaseAnalytics = FirebaseAnalytics.getInstance(context);
 
         // Set up audio control
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
@@ -724,10 +729,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
     }
     private void setupPadsFromFile() {
-        Log.d(LOG_TAG, "setupPadsFromFile");
+        Log("setupPadsFromFile");
         if (samples != null) {
             releaseAudioTracks();
-            Log.d(LOG_TAG, "audiotracks released");
+            Log("audiotracks released");
         }
         samples = new SparseArray<>(24);
         activePads = new ArrayList<>(24);
@@ -797,7 +802,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 }
             }).start();
         else {
-            Log.d(LOG_TAG, "setupPadsFromFrag");
+            Log("setupPadsFromFrag");
             int padIndex = 1;
             for (int id : touchPadIds) {
                 Sample sample;
@@ -900,7 +905,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         isAppDisabled = false;
     }
     private void setupPadsFromAssets(){
-        Log.d(LOG_TAG, "setupPadsFromFile");
+        Log("setupPadsFromFile");
         SharedPreferences.Editor prefEditor = launchPadprefs.edit();
         if (samples != null) releaseAudioTracks();
         samples = new SparseArray<>(24);
@@ -1183,7 +1188,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     private void releaseAudioTracks(){
         // Release audiotrack resources
-        Log.d(LOG_TAG, "Releasing audiotrack resources");
+        Log("Releasing audiotrack resources");
         for (Integer i : activePads) {
             Sample s = samples.get(i);
             isPlaying = false;
@@ -1349,6 +1354,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             R.id.touchPad20_textview, R.id.touchPad21_textview, R.id.touchPad22_textview, R.id.touchPad23_textview, R.id.touchPad24_textview};
     private int[] padColorDrawables = {R.drawable.launch_pad_blue, R.drawable.launch_pad_red, R.drawable.launch_pad_green, R.drawable.launch_pad_orange};
     private void gotoEditMode(){
+        // Record Firebase event
+        Bundle bundle = new Bundle();
+        firebaseAnalytics.logEvent("START_EDIT_MODE", bundle);
         isEditMode = true;
         showToolBar();
         updatePadOverlay();
@@ -1573,6 +1581,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         pad2.callOnClick();
     }
     private void loadPadFromDrop(String path, int padId, int color, boolean isAsset){
+        // Record Firebase event
+        Bundle bundle = new Bundle();
+        firebaseAnalytics.logEvent("ADD_SAMPLE_TO_MIX", bundle);
+
         TouchPad pad = (TouchPad)findViewById(padId);
         SharedPreferences.Editor editor = launchPadprefs.edit();
         if (activePads.contains((Integer)padId)) {
@@ -1617,7 +1629,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             if (Character.isDigit(filename.charAt(i)))
                 bpmString += filename.charAt(i);
         }
-        Log.d(LOG_TAG, "bpm from filename: " + bpmString);
+        Log("bpm from filename: " + bpmString);
 
         if (!bpmString.equals("")){
             int newBpm = Integer.valueOf(bpmString);
@@ -1776,25 +1788,21 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_BEAT);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BEAT);
                             v.setBackgroundResource(R.drawable.ic_q_beat);
-                            Log.d(LOG_TAG, "Beat");
                             break;
                         case Sample.Q_BEAT:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_HALF_BEAT);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_HALF_BEAT);
                             v.setBackgroundResource(R.drawable.ic_q_half_beat);
-                            Log.d(LOG_TAG, "Half beat");
                             break;
                         case Sample.Q_HALF_BEAT:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_BAR);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_BAR);
                             v.setBackgroundResource(R.drawable.ic_q_bar);
-                            Log.d(LOG_TAG, "Bar");
                             break;
                         case Sample.Q_BAR:
                             samples.get(selectedSampleID).setQuantizationMode(Sample.Q_NONE);
                             prefEditor.putInt(padNumber + QUANTIZE_MODE, Sample.Q_NONE);
                             v.setBackgroundResource(R.drawable.ic_q_none);
-                            Log.d(LOG_TAG, "None");
                             break;
                     }
                     prefEditor.apply();
@@ -1986,7 +1994,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     private SamplePackListAdapter samplePackListAdapter;
     private int sampleLibraryIndex = -1;
     private MediaPlayer samplePlayer;
-    private boolean hasLibShown = false;
 
     private class SampleListAdapter extends BaseAdapter {
         public ArrayList<File> sampleFiles;
@@ -2126,11 +2133,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         private void refresh(){
             // Add in downloaded packs
             if (samplePackDirectory.exists()) {
-                Log.d(LOG_TAG, "Refreshing sample pack list");
+                Log("Refreshing sample pack list");
                 File[] packFolders = samplePackDirectory.listFiles();
                 for (File folder : packFolders) {
                     if (folder.isDirectory() && !names.contains(folder.getName())) {
-                        Log.d(LOG_TAG, "Added pack " + folder.getName());
                         names.add(folder.getName());
                         try {
                             BufferedReader br = new BufferedReader(new FileReader(new File(folder, folder.getName() + ".txt")));
@@ -2521,10 +2527,8 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             isSampleLibraryShowing = true;
             if (!isEditMode) gotoEditMode();
             final LinearLayout library = (LinearLayout)findViewById(R.id.sample_library);
-            ListView sampleListView = (ListView)library.findViewById(R.id.sample_listview);
+            ListView sampleListView = (ListView)library.findViewById(R.id.sample_pack_listview);
 
-            if (!hasLibShown && sampleListAdapter.getCount() < 1 && samplePackListAdapter.getCount() < 2) SamplePacksClick(null);
-            hasLibShown = true;
             // Start the animation
             AnimatorSet set = new AnimatorSet();
             ObjectAnimator slideLeft = ObjectAnimator.ofFloat(library, "TranslationX", sampleListView.getWidth(), 0);
@@ -2558,7 +2562,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     private void hideSampleLibrary(){
         if (isSampleLibraryShowing) {
             LinearLayout library = (LinearLayout) findViewById(R.id.sample_library);
-            ListView sampleListView = (ListView) library.findViewById(R.id.sample_listview);
+            ListView sampleListView = (ListView) library.findViewById(R.id.sample_pack_listview);
             sampleLibraryIndex = -1;
 
             // Start the animation
@@ -2727,10 +2731,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 public void onIabSetupFinished(IabResult result) {
                     if (!result.isSuccess()) {
                         // Oh no, there was a problem.
-                        Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+                        Log("Problem setting up In-app Billing: " + result);
                         return;
                     }
-                    Log.d(LOG_TAG, "In-app billing initialized");
+                    Log("In-app billing initialized");
                     checkForUnconsumedPurchases();
                 }
             });
@@ -2745,7 +2749,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 e.printStackTrace();
             }
             mBillingHelper = null;
-            Log.d(LOG_TAG, "mBillingHelper disposed");
+            Log("mBillingHelper disposed");
         }
     }
     public void OpenStore(View v){
@@ -2837,7 +2841,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     private static final String SHOW_REMOVE_ADS_PROMPT = "SHOW_REMOVE_ADS_PROMPT";
     private boolean showRemoveAdsPrompt = true;
 
-    private int interactionCount = 5;
+    private int interactionCount = 9;
     private InterstitialAd mInterstitialAd;
     private void initializeAds(){
         if (activityPrefs.getBoolean(SHOW_ADS, true)) {
@@ -2893,7 +2897,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         if (activityPrefs.getBoolean(SHOW_ADS, true)
                 && mInterstitialAd != null
                 && mInterstitialAd.isLoaded()
-                && interactionCount > 4) {
+                && interactionCount > 8) {
             mInterstitialAd.show();
             interactionCount = 0;
         }
@@ -2921,6 +2925,9 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 //counter = recordingEndTime;
                 actionBarMenu.findItem(R.id.action_play).setIcon(R.drawable.ic_action_av_pause);
                 new Thread(new CounterThread()).start();
+                // Record Firebase event
+                Bundle bundle = new Bundle();
+                firebaseAnalytics.logEvent("START_MIXING", bundle);
             }
             if (timeOutTimer == null) {
                 timeOutTimer = new Timer();
@@ -3488,7 +3495,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
     }
     private void showTipPopup(final String tip, int msgId, int buttonTextId, int imageId, @Nullable final String nextTip){
         View popup = rootLayout.findViewById(R.id.tutorial_popup);
-        Log.d(LOG_TAG, tip);
+        Log(tip);
         if (popup == null) {
             LayoutInflater inflater = getLayoutInflater();
             popup = inflater.inflate(R.layout.tutorial_popup, null);
@@ -3669,7 +3676,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                 String[] eventArray = line.trim().split(";");
                 launchEvents.add(new LaunchEvent(Double.valueOf(eventArray[0]), eventArray[1], Integer.valueOf(eventArray[2])));
             }
-            Log.d(LOG_TAG, "Demo launch events loaded");
+            Log("Demo launch events loaded");
         } catch (IOException e) {
             e.printStackTrace();
             Log.e(LOG_TAG, "Error reading launch events");
@@ -3686,13 +3693,13 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
                     String[] eventArray = line.trim().split(";");
                     launchEvents.add(new LaunchEvent(Double.valueOf(eventArray[0]), eventArray[1], Integer.valueOf(eventArray[2])));
                 }
-                Log.d(LOG_TAG, "Launch events loaded");
+                Log("Launch events loaded");
             } catch (IOException e) {
                 e.printStackTrace();
                 Log.e(LOG_TAG, "Error reading launch events");
             }
         } else
-            Log.d(LOG_TAG, "Demo launch events file not found");
+            Log("Demo launch events file not found");
     }
     private void promptForFilename(){
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -4166,6 +4173,7 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }catch (IOException e) {e.printStackTrace();}
     }
 
+    // Utility methods
     private void CopyFile(File src, File dst) throws IOException {
         FileChannel inChannel = new FileInputStream(src).getChannel();
         FileChannel outChannel = new FileOutputStream(dst).getChannel();
@@ -4177,6 +4185,10 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             if (outChannel != null)
                 outChannel.close();
         }
+    }
+    private void Log(String msg){
+        if (BuildConfig.DEBUG)
+            Log.d(LOG_TAG, msg);
     }
 
     public class Sample{
@@ -4226,24 +4238,22 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
             }
             else {
                 sampleFile = new File(path);
-                Log.d(LOG_TAG, "Sample path: " + sampleFile.getAbsolutePath());
                 if (sampleFile.exists()){
                     sampleByteLength = (int)sampleFile.length() - 44;
                     sampleRate = Utils.getWavSampleRate(sampleFile);
                     reloadAudioTrack();
-                } else Log.d(LOG_TAG, "File doesn't exist");
+                } else Log.e(LOG_TAG, "File doesn't exist");
             }
         }
         public Sample(String path, int id){
             this.path = path;
             this.id = id;
             sampleFile = new File(path);
-            Log.d(LOG_TAG, "Sample path: " + sampleFile.getAbsolutePath());
             if (sampleFile.exists()){
                 sampleByteLength = (int)sampleFile.length() - 44;
                 sampleRate = Utils.getWavSampleRate(sampleFile);
                 reloadAudioTrack();
-            } else Log.d(LOG_TAG, "File doesn't exist");
+            } else Log.e(LOG_TAG, "File doesn't exist");
         }
 
         // Public methods
@@ -4390,7 +4400,6 @@ public class LaunchPadActivity extends AppCompatActivity implements SharedPrefer
         }
         public void reloadAudioTrack() {
             //Log.d(LOG_TAG, "sampleByteLength = " + sampleByteLength);
-            Log.d(LOG_TAG, "reloadAudioTrack, isAssetFile = " + isAssetFile);
             audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,
                     sampleRate,
                     AudioFormat.CHANNEL_OUT_STEREO,

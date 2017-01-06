@@ -20,6 +20,7 @@ import android.support.annotation.NonNull;
 import android.os.Bundle;
 import android.support.design.widget.BottomNavigationView;
 import android.support.design.widget.Snackbar;
+import android.support.v4.content.res.ResourcesCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.content.res.AppCompatResources;
@@ -176,13 +177,13 @@ public class StoreActivity extends AppCompatActivity {
                         .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
                             @Override
                             public void onComplete(@NonNull Task<AuthResult> task) {
-                                Log.d(LOG_TAG, "signInAnonymously:onComplete:" + task.isSuccessful());
+                                Log("signInAnonymously:onComplete:" + task.isSuccessful());
 
                                 // If sign in fails, display a message to the user. If sign in succeeds
                                 // the auth state listener will be notified and logic to handle the
                                 // signed in user can be handled in the listener.
                                 if (!task.isSuccessful()) {
-                                    Log.w(LOG_TAG, "signInAnonymously", task.getException());
+                                    Log.e(LOG_TAG, "signInAnonymously", task.getException());
                                     Toast.makeText(context, R.string.auth_error,
                                             Toast.LENGTH_SHORT).show();
                                 }
@@ -192,10 +193,7 @@ public class StoreActivity extends AppCompatActivity {
         } else if (!mAuth.getCurrentUser().isAnonymous()){
             // user is signed in!
             Toast.makeText(context, R.string.sign_in_success, Toast.LENGTH_SHORT).show();
-            if (actionBar != null){
-                TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
-                button.setText(R.string.sign_out);
-            }
+            updateSigninButton();
         }
 
     }
@@ -249,11 +247,7 @@ public class StoreActivity extends AppCompatActivity {
                 editor.putBoolean(AUTO_SIGN_IN, true);
                 editor.apply();
 
-                ActionBar actionBar = getSupportActionBar();
-                if (actionBar != null){
-                    TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
-                    button.setText(R.string.sign_out);
-                }
+                updateSigninButton();
 
                 FirebaseUser user = mAuth.getCurrentUser();
                 if (user != null) {
@@ -382,7 +376,7 @@ public class StoreActivity extends AppCompatActivity {
             public void onIabSetupFinished(IabResult result) {
                 if (!result.isSuccess()) {
                     // Oh no, there was a problem.
-                    Log.d(LOG_TAG, "Problem setting up In-app Billing: " + result);
+                    Log.e(LOG_TAG, "Problem setting up In-app Billing: " + result);
                 }
                 // Hooray, IAB is fully set up!
                 if (getIntent().hasExtra(SHOW_APP_EXTRAS)) {
@@ -402,7 +396,7 @@ public class StoreActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
             mBillingHelper = null;
-            Log.d(LOG_TAG, "mBillingHelper disposed");
+            Log("mBillingHelper disposed");
         }
     }
     private void unregisterNetworkListener(){
@@ -770,7 +764,7 @@ public class StoreActivity extends AppCompatActivity {
             public boolean accept(File dir, String filename) {
                 if (filename.contains(".txt")){
                     if (availPacks.contains(filename.replace(".txt", ""))) {
-                        Log.d(LOG_TAG, "Cached pack: " + filename);
+                        Log("Cached pack: " + filename);
                         //return true;
                         return false;
                     } else
@@ -784,7 +778,7 @@ public class StoreActivity extends AppCompatActivity {
             samplePackListAdapter.addPack(packName);
             if (cachedPacks.contains(packName + ".txt")){
                 samplePackListAdapter.addPackDetails(packName);
-                Log.d(LOG_TAG, "Added pack details for " + packName);
+                Log("Added pack details for " + packName);
             }
             else {
                 downloadInfo(packName);
@@ -836,14 +830,14 @@ public class StoreActivity extends AppCompatActivity {
             purchasesList.setAdapter(purchasesListAdapter);
             for (String record : recordArray) {
                 String[] details = record.trim().split(";");
-                Log.d(LOG_TAG, record);
+                Log(record);
                 if (details.length == 4) {
                     ownedPacks.add(details[0].trim());
                     purchasesListAdapter.addPack(details[0], details[1], details[2], Long.valueOf(details[3]));
                 }
             }
 
-            Log.d(LOG_TAG, "ownedPacks = " + ownedPacks.size());
+            Log("ownedPacks = " + ownedPacks.size());
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
             Log.e(LOG_TAG, "Error reading remote purchase list");
@@ -869,7 +863,7 @@ public class StoreActivity extends AppCompatActivity {
         }
     }
     private void LoadLocalPurchaseRec(){
-        Log.d(LOG_TAG, "Loading Local Purchase Record");
+        Log("Loading Local Purchase Record");
         ownedPacks = new ArrayList<>();
         purchasesListAdapter = new PurchasesListAdapter(context, R.layout.store_purchase_item);
         ListView purchasesList = (ListView)rootLayout.findViewById(R.id.purchases_listview);
@@ -887,14 +881,14 @@ public class StoreActivity extends AppCompatActivity {
                     }
                 }
 
-                Log.d(LOG_TAG, "ownedPacks = " + ownedPacks.size());
+                //Log("ownedPacks = " + ownedPacks.size());
 
             } catch (IOException e) {
                 e.printStackTrace();
                 Log.e(LOG_TAG, "Error reading local purchase record");
             }
         } else
-            Log.d(LOG_TAG, "No local purchase record found");
+            Log("No local purchase record found");
     }
     private boolean onNavigation(MenuItem item){
         switch(item.getItemId()){
@@ -1411,11 +1405,7 @@ public class StoreActivity extends AppCompatActivity {
                 .addOnCompleteListener(new OnCompleteListener<Void>() {
                     public void onComplete(@NonNull Task<Void> task) {
                         // user is now signed out
-                        ActionBar actionBar = getSupportActionBar();
-                        if (actionBar != null){
-                            TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
-                            button.setText(R.string.sign_in);
-                        }
+                        updateSigninButton();
                         Toast.makeText(context, R.string.sign_out_success, Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -1423,7 +1413,7 @@ public class StoreActivity extends AppCompatActivity {
     private void handleAuthStateChange(FirebaseUser user){
         if (user != null) {
             // User is signed in
-            Log.d(LOG_TAG, "onAuthStateChanged:signed_in:" + user.getUid());
+            Log("onAuthStateChanged:signed_in:" + user.getUid());
 
             // Setup storage references and download sample pack index
             packFolderRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/SamplePacks");
@@ -1450,19 +1440,19 @@ public class StoreActivity extends AppCompatActivity {
 
             // Download purchase list
             if (!user.isAnonymous()) {
-                Log.d(LOG_TAG, "Downloading purchase record");
+                Log("Downloading purchase record");
                 StorageReference purchasesRef = storage.getReferenceFromUrl("gs://mixmatic-loop-pad.appspot.com/user/" + user.getUid() + "/purchases.txt");
                 purchasesRef.getBytes(ONE_MEGABYTE).addOnSuccessListener(new OnSuccessListener<byte[]>() {
                     @Override
                     public void onSuccess(byte[] bytes) {
-                        Log.d(LOG_TAG, "Purchase record downloaded");
+                        Log("Purchase record downloaded");
                         LoadPurchaseRec(bytes);
                         if (purchasesShowing) showPurchases();
                     }
                 }).addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Log.d(LOG_TAG, "Error downloading purchase record: " + e.getMessage());
+                        Log("Error downloading purchase record: " + e.getMessage());
                         if (purchasesShowing) showPurchases();
                     }
                 });
@@ -1473,10 +1463,26 @@ public class StoreActivity extends AppCompatActivity {
 
         } else {
             // User is signed out
-            Log.d(LOG_TAG, "onAuthStateChanged:signed_out");
+            Log("onAuthStateChanged:signed_out");
             mAuth.signInAnonymously();
             LoadLocalPurchaseRec();
             if (purchasesShowing) showPurchases();
+        }
+    }
+    private void updateSigninButton(){
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null){
+            TextView button = (TextView)actionBar.getCustomView().findViewById(R.id.sign_in_button);
+            if (mAuth.getCurrentUser() == null || mAuth.getCurrentUser().isAnonymous()){
+                button.setText(R.string.sign_in);
+                button.setBackgroundResource(R.drawable.rounded_corner_2dp_accent);
+                button.setTextColor(ResourcesCompat.getColor(getResources(), R.color.text_primary_light, null));
+            }
+            else {
+                button.setText(R.string.sign_out);
+                button.setBackgroundResource(R.drawable.rounded_corner_2dp_primary);
+                button.setTextColor(ResourcesCompat.getColor(getResources(), R.color.primary_accent, null));
+            }
         }
     }
 
@@ -1824,7 +1830,7 @@ public class StoreActivity extends AppCompatActivity {
                 purchasesRef.putFile(Uri.fromFile(recordFile)).addOnCompleteListener(new OnCompleteListener<UploadTask.TaskSnapshot>() {
                     @Override
                     public void onComplete(@NonNull Task<UploadTask.TaskSnapshot> task) {
-                        Log.d(LOG_TAG, "Purchase record uploaded");
+                        Log("Purchase record uploaded");
                     }
                 });
             }
@@ -1865,5 +1871,11 @@ public class StoreActivity extends AppCompatActivity {
     public void BuyRemoveAdsClick(View v){
         if (appPrefs.getBoolean(LaunchPadActivity.SHOW_ADS, true))
             makePurchase(SKU_REMOVE_ADS);
+    }
+
+    // Utils
+    private void Log(String msg){
+        if (BuildConfig.DEBUG)
+            Log.d(LOG_TAG, msg);
     }
 }
